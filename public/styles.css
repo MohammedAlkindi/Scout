@@ -1,13 +1,15 @@
 /* ==========================================================================
    Scout — design tokens
    ==========================================================================
-   Concept: an instrument panel for light. Every number on screen (times,
-   scores, distances) reads like a meter readout, so numerals use a
-   monospace face while prose uses a plain humanist sans. The one signature
-   move: each result card's accent color is the actual color temperature of
-   the light phase it describes (golden hour = warm amber, blue hour = cool
-   indigo, daylight/night = neutral slate) — color here carries information,
-   it isn't decoration.
+   Concept: a calm operations console, not a photo app. Neutral graphite
+   surfaces, a single restrained accent for actions and focus, and hairline
+   borders instead of soft glows. Numerals stay monospace (times, scores,
+   distances read like instrument data); prose stays a plain humanist sans.
+   The one signature move survives, dialed down: each result card carries a
+   small color-temperature indicator for its light phase (golden hour =
+   warm, blue hour = cool, daylight/night = neutral) — a single dot and
+   hairline, not a saturated wash. Color still carries information; it just
+   no longer shouts.
 
    System font stacks only (no @font-face / external font loading): keeps
    the app usable offline and avoids a render-blocking network request,
@@ -23,14 +25,14 @@
   --text-sm: 0.875rem;
   --text-base: 1rem;
   --text-md: 1.125rem;
-  --text-lg: 1.5rem;
-  --text-xl: 2rem;
-  --text-2xl: 2.75rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
 
   --leading-tight: 1.15;
   --leading-normal: 1.5;
 
-  --tracking-wide: 0.06em;
+  --tracking-wide: 0.05em;
 
   /* ---- space ---- */
   --space-1: 0.25rem;
@@ -42,98 +44,98 @@
   --space-7: 3rem;
 
   /* ---- shape ---- */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
   --border-width: 1px;
 
   /* ---- motion ---- */
   --duration-fast: 120ms;
-  --duration-base: 220ms;
+  --duration-base: 180ms;
   --ease-standard: cubic-bezier(0.2, 0.7, 0.3, 1);
 
   /* ---- layout ---- */
   --content-max-width: 32rem;
   --tap-target-min: 2.75rem;
 
-  /* ---- light-phase accents (identity colors, same in both themes) ---- */
-  --phase-golden-h: 38;
-  --phase-blue-h: 226;
-
   /* ---- dark theme (default) ---- */
-  --color-bg: #15171b;
-  --color-bg-raised: #1b1e23;
-  --color-surface: #20242a;
-  --color-surface-hover: #262b32;
-  --color-border: #2d323a;
-  --color-text: #edf0f2;
-  --color-text-dim: #9aa4af;
-  --color-text-faint: #6b7480;
-  --color-accent-golden: #e7a83d;
-  --color-accent-blue: #7391e0;
-  --color-accent-day: #c9cdd3;
-  --color-accent-night: #6b7280;
-  --color-danger: #e07a5f;
-  --color-focus-ring: #e7a83d;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --color-bg: #0c0e11;
+  --color-bg-raised: #111318;
+  --color-surface: #15181d;
+  --color-surface-hover: #1b1f25;
+  --color-border: #262b32;
+  --color-text: #e6e9ec;
+  --color-text-dim: #8b929c;
+  --color-text-faint: #5a616a;
+  --color-accent: #6b83e8;
+  --color-accent-golden: #b99a5f;
+  --color-accent-blue: #7c8db3;
+  --color-accent-day: #9aa0a8;
+  --color-accent-night: #5f6672;
+  --color-danger: #c96a56;
+  --color-focus-ring: #6b83e8;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --color-bg: #f1f4f7;
-    --color-bg-raised: #f8fafc;
+    --color-bg: #f5f6f7;
+    --color-bg-raised: #fafbfb;
     --color-surface: #ffffff;
-    --color-surface-hover: #eef1f4;
-    --color-border: #dde2e7;
-    --color-text: #171a1e;
-    --color-text-dim: #565f68;
-    --color-text-faint: #838c94;
-    --color-accent-golden: #a8681c;
-    --color-accent-blue: #3950a8;
+    --color-surface-hover: #eef0f2;
+    --color-border: #e1e4e7;
+    --color-text: #191c1f;
+    --color-text-dim: #565d66;
+    --color-text-faint: #868d95;
+    --color-accent: #3d54c4;
+    --color-accent-golden: #8a6a30;
+    --color-accent-blue: #4c5d85;
     --color-accent-day: #6b7280;
-    --color-accent-night: #565f68;
-    --color-danger: #b8402a;
-    --color-focus-ring: #a8681c;
-    --shadow-card: 0 1px 2px rgba(20, 24, 28, 0.06), 0 8px 24px rgba(20, 24, 28, 0.08);
+    --color-accent-night: #565d66;
+    --color-danger: #a8442f;
+    --color-focus-ring: #3d54c4;
+    --shadow-card: 0 1px 2px rgba(20, 24, 28, 0.05);
   }
 }
 
 /* Explicit overrides win regardless of media query, for any future manual
    theme toggle -- there isn't one today, but this keeps the contract honest. */
 :root[data-theme="dark"] {
-  --color-bg: #15171b;
-  --color-bg-raised: #1b1e23;
-  --color-surface: #20242a;
-  --color-surface-hover: #262b32;
-  --color-border: #2d323a;
-  --color-text: #edf0f2;
-  --color-text-dim: #9aa4af;
-  --color-text-faint: #6b7480;
-  --color-accent-golden: #e7a83d;
-  --color-accent-blue: #7391e0;
-  --color-accent-day: #c9cdd3;
-  --color-accent-night: #6b7280;
-  --color-danger: #e07a5f;
-  --color-focus-ring: #e7a83d;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --color-bg: #0c0e11;
+  --color-bg-raised: #111318;
+  --color-surface: #15181d;
+  --color-surface-hover: #1b1f25;
+  --color-border: #262b32;
+  --color-text: #e6e9ec;
+  --color-text-dim: #8b929c;
+  --color-text-faint: #5a616a;
+  --color-accent: #6b83e8;
+  --color-accent-golden: #b99a5f;
+  --color-accent-blue: #7c8db3;
+  --color-accent-day: #9aa0a8;
+  --color-accent-night: #5f6672;
+  --color-danger: #c96a56;
+  --color-focus-ring: #6b83e8;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 :root[data-theme="light"] {
-  --color-bg: #f1f4f7;
-  --color-bg-raised: #f8fafc;
+  --color-bg: #f5f6f7;
+  --color-bg-raised: #fafbfb;
   --color-surface: #ffffff;
-  --color-surface-hover: #eef1f4;
-  --color-border: #dde2e7;
-  --color-text: #171a1e;
-  --color-text-dim: #565f68;
-  --color-text-faint: #838c94;
-  --color-accent-golden: #a8681c;
-  --color-accent-blue: #3950a8;
+  --color-surface-hover: #eef0f2;
+  --color-border: #e1e4e7;
+  --color-text: #191c1f;
+  --color-text-dim: #565d66;
+  --color-text-faint: #868d95;
+  --color-accent: #3d54c4;
+  --color-accent-golden: #8a6a30;
+  --color-accent-blue: #4c5d85;
   --color-accent-day: #6b7280;
-  --color-accent-night: #565f68;
-  --color-danger: #b8402a;
-  --color-focus-ring: #a8681c;
-  --shadow-card: 0 1px 2px rgba(20, 24, 28, 0.06), 0 8px 24px rgba(20, 24, 28, 0.08);
+  --color-accent-night: #565d66;
+  --color-danger: #a8442f;
+  --color-focus-ring: #3d54c4;
+  --shadow-card: 0 1px 2px rgba(20, 24, 28, 0.05);
 }
 
 /* ==========================================================================
@@ -242,7 +244,7 @@ img {
 
 .wordmark {
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: var(--leading-tight);
 }
@@ -339,12 +341,13 @@ img {
   min-height: 2.25rem;
   padding: var(--space-2) var(--space-4);
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background-color: var(--color-surface);
   color: var(--color-text-dim);
   font-size: var(--text-sm);
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard);
 }
 
@@ -353,9 +356,10 @@ img {
 }
 
 .chip[aria-pressed="true"] {
+  background-color: var(--color-surface-hover);
   border-color: var(--color-text);
   color: var(--color-text);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* ==========================================================================
@@ -370,7 +374,7 @@ img {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-accent-golden);
+  color: var(--color-accent);
 }
 
 /* ==========================================================================
@@ -393,7 +397,7 @@ img {
 
 .intent-form__title {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
   line-height: var(--leading-tight);
 }
 
@@ -421,7 +425,7 @@ img {
   height: 1rem;
   border-radius: 50%;
   border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent-golden);
+  border-top-color: var(--color-accent);
   animation: spin 800ms linear infinite;
   flex: none;
 }
@@ -446,7 +450,7 @@ img {
 
 .results-header__title {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .results-header__subtitle {
@@ -480,9 +484,9 @@ img {
   position: relative;
   background-color: var(--color-surface);
   border: var(--border-width) solid var(--color-border);
-  border-left-width: 3px;
+  border-left-width: 2px;
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) - 2px);
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) - 1px);
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
@@ -515,28 +519,38 @@ img {
 }
 
 .card__phase-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  padding: 0.2rem var(--space-2);
-  border-radius: 999px;
-  border: var(--border-width) solid currentColor;
+  color: var(--color-text-dim);
 }
 
-.card--golden_hour .card__phase-pill {
+.card__phase-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex: none;
+}
+
+.card--golden_hour .card__phase-pill::before {
   color: var(--color-accent-golden);
 }
 
-.card--blue_hour .card__phase-pill {
+.card--blue_hour .card__phase-pill::before {
   color: var(--color-accent-blue);
 }
 
-.card--daylight .card__phase-pill {
+.card--daylight .card__phase-pill::before {
   color: var(--color-accent-day);
 }
 
-.card--night .card__phase-pill {
+.card--night .card__phase-pill::before {
   color: var(--color-accent-night);
 }
 
@@ -548,7 +562,7 @@ img {
 
 .card__name {
   font-size: var(--text-md);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .card__meta {
@@ -584,7 +598,7 @@ img {
 
 .card__score-track {
   flex: 1;
-  height: 4px;
+  height: 3px;
   border-radius: 999px;
   background-color: var(--color-border);
   overflow: hidden;
