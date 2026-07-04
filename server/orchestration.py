@@ -374,6 +374,7 @@ async def build_recommendation(
             crowd_level=candidate.crowd_level,
             permit_required=candidate.permit_required,
             accessibility_difficulty=candidate.accessibility_difficulty,
+            distance_miles=candidate.distance_miles,
         )
         best: Optional[_RankedLocation] = None
         for window, light, weather in window_contexts:

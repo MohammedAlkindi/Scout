@@ -18,12 +18,14 @@ def make_location(
     crowd_level: CrowdLevel = CrowdLevel.LOW,
     permit_required: bool = False,
     accessibility_difficulty: float = 0.1,
+    distance_miles: float = 0.0,
 ) -> LocationConditions:
     return LocationConditions(
         name=name,
         crowd_level=crowd_level,
         permit_required=permit_required,
         accessibility_difficulty=accessibility_difficulty,
+        distance_miles=distance_miles,
     )
 
 
@@ -135,6 +137,24 @@ def test_accessibility_difficulty_reduces_score() -> None:
     easy = score_window(make_location(accessibility_difficulty=0.0), light, weather, ShotType.LANDSCAPE)
     hard = score_window(make_location(accessibility_difficulty=1.0), light, weather, ShotType.LANDSCAPE)
     assert easy.score > hard.score
+
+
+def test_greater_distance_reduces_score() -> None:
+    weather = make_weather()
+    light = WindowLightContext(phase=LightPhase.GOLDEN_HOUR, centrality=1.0)
+
+    near = score_window(make_location(distance_miles=0.5), light, weather, ShotType.LANDSCAPE)
+    far = score_window(make_location(distance_miles=15.0), light, weather, ShotType.LANDSCAPE)
+    assert near.score > far.score
+
+
+def test_short_distance_is_free() -> None:
+    weather = make_weather()
+    light = WindowLightContext(phase=LightPhase.GOLDEN_HOUR, centrality=1.0)
+
+    default = score_window(make_location(distance_miles=0.0), light, weather, ShotType.LANDSCAPE)
+    short_walk = score_window(make_location(distance_miles=1.0), light, weather, ShotType.LANDSCAPE)
+    assert default.score == short_walk.score
 
 
 def test_astro_shot_type_prefers_clear_skies_over_landscape_band() -> None:

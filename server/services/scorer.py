@@ -10,7 +10,8 @@ The score is a weighted blend of four components:
                             window naturally produces
   - weather comfort  (30%): wind, visibility, precipitation risk
   - crowd            (20%): lower expected crowding scores higher
-  - access friction   (15%): permit requirements and difficult accessibility
+  - access friction   (15%): permit requirements, difficult accessibility,
+                            and distance from the searcher's origin all
                             reduce the score
 
 Weights are module-level constants so the rationale is visible at a glance
@@ -85,6 +86,10 @@ class LocationConditions:
     crowd_level: CrowdLevel
     permit_required: bool
     accessibility_difficulty: float  # 0 (easy, paved/short) .. 1 (very hard)
+    # Distance from the searcher's origin, in miles. Defaults to 0 (no
+    # penalty) for callers with no origin to measure from, e.g. score_window
+    # scoring a bare lat/lng with no "searcher" in the picture.
+    distance_miles: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -148,11 +153,31 @@ def _weather_score(weather: WeatherSnapshot, shot_type: ShotType) -> float:
     return cloud * 0.4 + wind * 0.2 + visibility * 0.15 + precip * 0.25
 
 
+# A short walk or drive costs nothing extra; beyond that, farther candidates
+# eat into a tight golden/blue-hour window with travel time that pure
+# terrain difficulty doesn't capture. Capped at the default search radius
+# so merely being "far" within the requested radius never dominates the
+# score the way an actual access barrier (permit, difficult terrain) does.
+_DISTANCE_FREE_MILES = 1.0
+_DISTANCE_MAX_PENALTY_MILES = 15.0
+_DISTANCE_MAX_PENALTY = 20.0
+
+
+def _distance_penalty(distance_miles: float) -> float:
+    distance = max(0.0, distance_miles)
+    if distance <= _DISTANCE_FREE_MILES:
+        return 0.0
+    span = _DISTANCE_MAX_PENALTY_MILES - _DISTANCE_FREE_MILES
+    fraction = min(1.0, (distance - _DISTANCE_FREE_MILES) / span)
+    return fraction * _DISTANCE_MAX_PENALTY
+
+
 def _access_score(location: LocationConditions) -> float:
     permit_penalty = 20.0 if location.permit_required else 0.0
     difficulty = max(0.0, min(1.0, location.accessibility_difficulty))
     difficulty_penalty = difficulty * 40.0
-    return max(0.0, 100.0 - permit_penalty - difficulty_penalty)
+    distance_penalty = _distance_penalty(location.distance_miles)
+    return max(0.0, 100.0 - permit_penalty - difficulty_penalty - distance_penalty)
 
 
 def _explain(

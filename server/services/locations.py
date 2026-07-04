@@ -163,13 +163,32 @@ def _accessibility_notes(tags: dict) -> str:
     return "; ".join(notes) if notes else "accessibility unknown -- verify locally"
 
 
+_TERRAIN_BASE_DIFFICULTY: dict[str, float] = {
+    "waterfall": 0.5,
+    "nature reserve": 0.4,
+    "forest": 0.4,
+    "beach": 0.25,
+    "scenic viewpoint": 0.25,
+    "waterfront": 0.25,
+    "urban park": 0.15,
+    "landmark": 0.2,
+    "historic architecture": 0.15,
+}
+# natural=peak/cliff is handled by the explicit override at the bottom of
+# _accessibility_difficulty instead of this table, since it must win even
+# over a low wheelchair-tagged baseline.
+_DEFAULT_TERRAIN_DIFFICULTY = 0.3  # unrecognized tag combination ("point of interest")
+
+
 def _accessibility_difficulty(tags: dict) -> float:
     """Heuristic 0 (easy) - 1 (very hard) difficulty estimate from OSM tags.
 
-    Defaults to a moderate 0.3 when no relevant tag is present, since most
-    OSM features simply don't carry accessibility metadata.
+    Starts from a per-terrain baseline -- a waterfall or nature-reserve
+    trail starts harder than a roadside viewpoint or urban park -- since
+    most OSM features carry no explicit accessibility metadata at all.
+    Wheelchair/surface tags, when present, then override or raise it.
     """
-    difficulty = 0.3
+    difficulty = _TERRAIN_BASE_DIFFICULTY.get(_infer_terrain(tags), _DEFAULT_TERRAIN_DIFFICULTY)
     wheelchair = tags.get("wheelchair")
     if wheelchair == "yes":
         difficulty = 0.05
@@ -202,12 +221,18 @@ def _crowd_level(tags: dict) -> CrowdLevel:
 
     Not a real crowd-sourced signal (Overpass has no foot-traffic data) --
     used only as a reasonable default until a dedicated crowd-data source
-    is integrated.
+    is integrated. A bare `tourism=viewpoint` tag is *not* treated as a
+    popularity signal on its own: it's one of the tags Scout searches by
+    default, so most candidates carry it -- counting it here would flatten
+    nearly every result into the same MEDIUM bucket. Only an actual
+    notability tag, or the more deliberate `tourism=attraction` tag, escalates
+    a location above LOW.
     """
     notable = any(key in tags for key in ("wikipedia", "wikidata", "wikimedia_commons"))
-    if notable and tags.get("tourism") == "attraction":
+    is_attraction = tags.get("tourism") == "attraction"
+    if notable and is_attraction:
         return CrowdLevel.HIGH
-    if notable or tags.get("tourism") in ("viewpoint", "attraction"):
+    if notable or is_attraction:
         return CrowdLevel.MEDIUM
     return CrowdLevel.LOW
 
