@@ -25,13 +25,32 @@ def _env_int(name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def _env_csv(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    values = tuple(value.strip() for value in raw.split(",") if value.strip())
+    return values or default
+
+
 OPEN_METEO_BASE_URL = os.environ.get("OPEN_METEO_BASE_URL", "https://api.open-meteo.com/v1/forecast")
 OVERPASS_BASE_URL = os.environ.get("OVERPASS_BASE_URL", "https://overpass-api.de/api/interpreter")
+OVERPASS_BASE_URLS = _env_csv(
+    "OVERPASS_BASE_URLS",
+    (
+        OVERPASS_BASE_URL,
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    ),
+)
 
 # Overpass blocks requests without a descriptive User-Agent.
 HTTP_USER_AGENT = os.environ.get("SCOUT_HTTP_USER_AGENT", "Scout/1.0 (photography recommendation tool)")
 
 HTTP_TIMEOUT_SECONDS = _env_float("SCOUT_HTTP_TIMEOUT_SECONDS", 12.0)
+OVERPASS_HTTP_TIMEOUT_SECONDS = _env_float("SCOUT_OVERPASS_HTTP_TIMEOUT_SECONDS", 3.0)
+OVERPASS_QUERY_TIMEOUT_SECONDS = _env_int("SCOUT_OVERPASS_QUERY_TIMEOUT_SECONDS", 3)
+OVERPASS_MAX_ATTEMPTS = _env_int("SCOUT_OVERPASS_MAX_ATTEMPTS", 2)
+OVERPASS_RATE_LIMIT_COOLDOWN_SECONDS = _env_float("SCOUT_OVERPASS_RATE_LIMIT_COOLDOWN_SECONDS", 60.0)
 
 # Current conditions drift within minutes; geography does not.
 WEATHER_CACHE_TTL_SECONDS = _env_int("SCOUT_WEATHER_CACHE_TTL_SECONDS", 600)

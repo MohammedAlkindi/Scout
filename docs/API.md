@@ -27,6 +27,14 @@ All expected errors return a small JSON object:
 
 Raw upstream exceptions are not exposed to clients.
 
+Common operational errors:
+
+| Status | Example message | Meaning |
+| --- | --- | --- |
+| `404` | `No named locations found matching this description in the given radius.` | The provider responded, but Scout could not find named places for the intent/radius. |
+| `429` | `Location provider is rate-limited. Try a more specific intent or smaller search radius.` | OpenStreetMap Overpass throttled the request. This is more likely for broad intents in dense cities. |
+| `502` | `Location search is temporarily unavailable. Try a more specific intent or smaller search radius.` | The location provider timed out, returned an unexpected response, or failed. |
+
 ## `GET /api/health`
 
 Health check for deployment and smoke tests.
@@ -78,6 +86,19 @@ curl "http://127.0.0.1:8420/api/conditions?lat=23.5791&lng=58.4026"
 ## `GET /api/locations`
 
 Finds named nearby candidate places from OpenStreetMap/Overpass.
+
+Scout intentionally narrows Overpass queries before sending them:
+
+- generic photo intents search named viewpoints and parks instead of broad
+  unnamed map features
+- broad searches start with a small radius and expand only if no named
+  candidates are found
+- dense-city searches start with a 1-mile pass to avoid expensive provider
+  queries before expanding outward
+- unnamed OSM features are filtered out at query time because they do not make
+  useful user-facing recommendations
+- multi-category intents are searched as focused tag groups instead of one
+  large union query
 
 Query parameters:
 

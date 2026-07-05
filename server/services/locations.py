@@ -14,21 +14,37 @@ Overpass rejects requests without a descriptive User-Agent header.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
+from time import monotonic
 from typing import Optional
 
 import httpx
 
 from server import config
-from server.errors import NoCandidatesFoundError, UpstreamServiceError
+from server.errors import NoCandidatesFoundError, RateLimitedError, UpstreamServiceError
 from server.rate_limiter import TokenBucket
 from server.services.scorer import CrowdLevel
 
+logger = logging.getLogger("scout.locations")
+
 _rate_limiter = TokenBucket(config.LOCATIONS_RATE_LIMIT_MAX_CALLS, config.LOCATIONS_RATE_LIMIT_PER_SECONDS)
+_endpoint_cooldowns: dict[str, float] = {}
 
 _EARTH_RADIUS_MILES = 3958.8
-_MAX_RAW_RESULTS = 40
+_MAX_RAW_RESULTS = 30
+_MAX_TAGS_PER_QUERY = 2
+_FIRST_PASS_RADIUS_MILES = 1.0
+_SECOND_PASS_RADIUS_MILES = 3.0
+_THIRD_PASS_RADIUS_MILES = 8.0
+
+_LOCATION_RATE_LIMIT_MESSAGE = (
+    "Location provider is rate-limited. Try a more specific intent or smaller search radius."
+)
+_LOCATION_UNAVAILABLE_MESSAGE = (
+    "Location search is temporarily unavailable. Try a more specific intent or smaller search radius."
+)
 
 # Free-text keyword -> OSM (key, value) tag pairs to search for. A
 # description can match multiple keywords; matched tag sets are unioned.
@@ -57,15 +73,22 @@ _KEYWORD_TAGS: dict[str, list[tuple[str, str]]] = {
     "street": [("tourism", "attraction")],
     "park": [("leisure", "park")],
     "portrait": [("leisure", "park"), ("tourism", "attraction")],
+    "romantic": [("leisure", "park"), ("tourism", "viewpoint"), ("tourism", "attraction")],
+    "couple": [("leisure", "park"), ("tourism", "viewpoint"), ("tourism", "attraction")],
+    "engagement": [("leisure", "park"), ("tourism", "viewpoint"), ("tourism", "attraction")],
+    "proposal": [("leisure", "park"), ("tourism", "viewpoint"), ("tourism", "attraction")],
+    "wedding": [("leisure", "park"), ("tourism", "viewpoint"), ("tourism", "attraction")],
     "astro": [("natural", "peak"), ("tourism", "viewpoint")],
     "stars": [("natural", "peak"), ("tourism", "viewpoint")],
     "night": [("natural", "peak"), ("tourism", "viewpoint")],
+    "photography": [("tourism", "viewpoint"), ("leisure", "park")],
+    "photos": [("tourism", "viewpoint"), ("leisure", "park")],
+    "photo": [("tourism", "viewpoint"), ("leisure", "park")],
+    "shoot": [("tourism", "viewpoint"), ("leisure", "park")],
 }
 
 _DEFAULT_TAGS: list[tuple[str, str]] = [
     ("tourism", "viewpoint"),
-    ("natural", "peak"),
-    ("natural", "water"),
     ("leisure", "park"),
 ]
 
@@ -109,7 +132,7 @@ def _tags_for_intent(intent: str) -> list[tuple[str, str]]:
             for tag in tags:
                 if tag not in matched:
                     matched.append(tag)
-    return matched or _DEFAULT_TAGS
+    return (matched or _DEFAULT_TAGS)[:_MAX_TAGS_PER_QUERY]
 
 
 def _haversine_miles(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -123,10 +146,35 @@ def _haversine_miles(lat1: float, lng1: float, lat2: float, lng2: float) -> floa
 def _build_overpass_query(lat: float, lng: float, radius_meters: float, tags: list[tuple[str, str]]) -> str:
     clauses = []
     for key, value in tags:
-        clauses.append(f'node["{key}"="{value}"](around:{radius_meters},{lat},{lng});')
-        clauses.append(f'way["{key}"="{value}"](around:{radius_meters},{lat},{lng});')
+        clauses.append(f'node["{key}"="{value}"]["name"](around:{radius_meters},{lat},{lng});')
+        clauses.append(f'way["{key}"="{value}"]["name"](around:{radius_meters},{lat},{lng});')
     body = "\n  ".join(clauses)
-    return f"[out:json][timeout:20];\n(\n  {body}\n);\nout center {_MAX_RAW_RESULTS};"
+    return f"[out:json][timeout:{config.OVERPASS_QUERY_TIMEOUT_SECONDS}];\n(\n  {body}\n);\nout center {_MAX_RAW_RESULTS};"
+
+
+def _search_radii(radius_miles: float) -> list[float]:
+    """Search nearby first, expanding only when no named candidates are found."""
+    radii: list[float] = []
+    for checkpoint in (_FIRST_PASS_RADIUS_MILES, _SECOND_PASS_RADIUS_MILES, _THIRD_PASS_RADIUS_MILES, radius_miles):
+        radius = min(radius_miles, checkpoint)
+        if radius <= 0:
+            continue
+        if not radii or abs(radii[-1] - radius) > 0.01:
+            radii.append(radius)
+    return radii
+
+
+def _tag_groups(tags: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
+    """Try focused single-tag queries instead of one expensive union query."""
+    return [[tag] for tag in tags]
+
+
+def _endpoint_is_cooling_down(endpoint: str) -> bool:
+    return monotonic() < _endpoint_cooldowns.get(endpoint, 0.0)
+
+
+def _start_endpoint_cooldown(endpoint: str) -> None:
+    _endpoint_cooldowns[endpoint] = monotonic() + config.OVERPASS_RATE_LIMIT_COOLDOWN_SECONDS
 
 
 def _element_coords(element: dict) -> Optional[tuple[float, float]]:
@@ -259,6 +307,83 @@ def _image_info(tags: dict) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
+async def _fetch_overpass_json(client: httpx.AsyncClient, endpoint: str, query: str) -> dict:
+    try:
+        response = await client.post(
+            endpoint,
+            data={"data": query},
+            headers={"User-Agent": config.HTTP_USER_AGENT},
+        )
+        response.raise_for_status()
+        data = response.json()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code == 429:
+            _start_endpoint_cooldown(endpoint)
+            raise RateLimitedError(_LOCATION_RATE_LIMIT_MESSAGE) from exc
+        raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE) from exc
+    except httpx.TimeoutException as exc:
+        raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE) from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE) from exc
+
+    if not isinstance(data, dict):
+        raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE)
+    remark = data.get("remark")
+    if isinstance(remark, str) and "runtime error" in remark.lower():
+        raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE)
+    return data
+
+
+def _candidate_from_element(origin_lat: float, origin_lng: float, element: dict) -> Optional[LocationCandidate]:
+    coords = _element_coords(element)
+    if coords is None:
+        return None
+
+    tags_dict = element.get("tags", {})
+    if not isinstance(tags_dict, dict):
+        return None
+
+    name = tags_dict.get("name")
+    if not name:
+        return None
+
+    elat, elng = coords
+    permit_required, permit_notes = _permit_info(tags_dict)
+    image_url, image_attribution = _image_info(tags_dict)
+    return LocationCandidate(
+        name=name,
+        latitude=elat,
+        longitude=elng,
+        distance_miles=round(_haversine_miles(origin_lat, origin_lng, elat, elng), 2),
+        terrain_type=_infer_terrain(tags_dict),
+        accessibility_notes=_accessibility_notes(tags_dict),
+        accessibility_difficulty=_accessibility_difficulty(tags_dict),
+        permit_required=permit_required,
+        permit_notes=permit_notes,
+        crowd_level=_crowd_level(tags_dict),
+        osm_id=element.get("id", 0),
+        image_url=image_url,
+        image_attribution=image_attribution,
+    )
+
+
+def _candidates_from_elements(origin_lat: float, origin_lng: float, elements: object) -> list[LocationCandidate]:
+    if not isinstance(elements, list):
+        return []
+
+    candidates: list[LocationCandidate] = []
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        candidate = _candidate_from_element(origin_lat, origin_lng, element)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    candidates.sort(key=lambda c: c.distance_miles)
+    return candidates
+
+
 async def find_locations(
     lat: float, lng: float, radius_miles: float, intent: str, limit: int = 10
 ) -> list[LocationCandidate]:
@@ -270,53 +395,71 @@ async def find_locations(
     await _rate_limiter.acquire()
 
     tags = _tags_for_intent(intent)
-    radius_meters = radius_miles * 1609.344
-    query = _build_overpass_query(lat, lng, radius_meters, tags)
 
-    try:
-        async with httpx.AsyncClient(timeout=config.HTTP_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                config.OVERPASS_BASE_URL,
-                data={"data": query},
-                headers={"User-Agent": config.HTTP_USER_AGENT},
-            )
-            response.raise_for_status()
-            data = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        raise UpstreamServiceError("Location search is temporarily unavailable.") from exc
+    last_upstream_error: Optional[UpstreamServiceError] = None
+    last_rate_limit_error: Optional[RateLimitedError] = None
+    successful_queries = 0
 
-    candidates: list[LocationCandidate] = []
-    for element in data.get("elements", []):
-        coords = _element_coords(element)
-        if coords is None:
-            continue
-        elat, elng = coords
-        tags_dict = element.get("tags", {})
-        name = tags_dict.get("name")
-        if not name:
-            continue  # unnamed features make poor recommendations
-        permit_required, permit_notes = _permit_info(tags_dict)
-        image_url, image_attribution = _image_info(tags_dict)
-        candidates.append(
-            LocationCandidate(
-                name=name,
-                latitude=elat,
-                longitude=elng,
-                distance_miles=round(_haversine_miles(lat, lng, elat, elng), 2),
-                terrain_type=_infer_terrain(tags_dict),
-                accessibility_notes=_accessibility_notes(tags_dict),
-                accessibility_difficulty=_accessibility_difficulty(tags_dict),
-                permit_required=permit_required,
-                permit_notes=permit_notes,
-                crowd_level=_crowd_level(tags_dict),
-                osm_id=element.get("id", 0),
-                image_url=image_url,
-                image_attribution=image_attribution,
-            )
-        )
+    attempt_count = 0
+    exhausted_attempts = False
 
-    if not candidates:
-        raise NoCandidatesFoundError("No named locations found matching this description in the given radius.")
+    async with httpx.AsyncClient(timeout=config.OVERPASS_HTTP_TIMEOUT_SECONDS) as client:
+        for search_radius_miles in _search_radii(radius_miles):
+            for tag_group in _tag_groups(tags):
+                radius_meters = search_radius_miles * 1609.344
+                query = _build_overpass_query(lat, lng, radius_meters, tag_group)
+                for endpoint_index, endpoint in enumerate(config.OVERPASS_BASE_URLS):
+                    if _endpoint_is_cooling_down(endpoint):
+                        last_rate_limit_error = RateLimitedError(_LOCATION_RATE_LIMIT_MESSAGE)
+                        continue
 
-    candidates.sort(key=lambda c: c.distance_miles)
-    return candidates[:limit]
+                    if attempt_count >= config.OVERPASS_MAX_ATTEMPTS:
+                        exhausted_attempts = True
+                        break
+
+                    attempt_count += 1
+                    try:
+                        data = await _fetch_overpass_json(client, endpoint, query)
+                    except RateLimitedError as exc:
+                        last_rate_limit_error = exc
+                        logger.warning(
+                            "OSM candidate query rate-limited radius_miles=%.1f tag_count=%s endpoint_index=%s",
+                            search_radius_miles,
+                            len(tag_group),
+                            endpoint_index,
+                        )
+                        continue
+                    except UpstreamServiceError as exc:
+                        last_upstream_error = exc
+                        logger.warning(
+                            "OSM candidate query failed radius_miles=%.1f tag_count=%s endpoint_index=%s",
+                            search_radius_miles,
+                            len(tag_group),
+                            endpoint_index,
+                        )
+                        continue
+
+                    successful_queries += 1
+                    candidates = _candidates_from_elements(lat, lng, data.get("elements", []))
+                    if candidates:
+                        logger.info(
+                            "Found %s OSM candidates radius_miles=%.1f tag_count=%s",
+                            len(candidates),
+                            search_radius_miles,
+                            len(tag_group),
+                        )
+                        return candidates[:limit]
+
+                    break
+
+                if exhausted_attempts:
+                    break
+            if exhausted_attempts:
+                break
+
+    if successful_queries == 0 and last_rate_limit_error is not None:
+        raise last_rate_limit_error
+    if successful_queries == 0 and last_upstream_error is not None:
+        raise last_upstream_error
+
+    raise NoCandidatesFoundError("No named locations found matching this description in the given radius.")

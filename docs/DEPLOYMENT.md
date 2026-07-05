@@ -55,6 +55,11 @@ Optional environment variables:
 | --- | --- |
 | `OPEN_METEO_BASE_URL` | Override weather provider endpoint. |
 | `OVERPASS_BASE_URL` | Override Overpass endpoint. |
+| `OVERPASS_BASE_URLS` | Optional comma-separated Overpass-compatible endpoint list for failover. Defaults to the primary Overpass endpoint plus a tested Overpass-compatible mirror. |
+| `SCOUT_OVERPASS_QUERY_TIMEOUT_SECONDS` | Overpass query timeout embedded in the Overpass query. Defaults to `3`. |
+| `SCOUT_OVERPASS_HTTP_TIMEOUT_SECONDS` | HTTP timeout for each Overpass request. Defaults to `3`. |
+| `SCOUT_OVERPASS_MAX_ATTEMPTS` | Maximum focused Overpass attempts per location search. Defaults to `2`. |
+| `SCOUT_OVERPASS_RATE_LIMIT_COOLDOWN_SECONDS` | In-process cooldown after an Overpass `429`. Defaults to `60`. |
 | `SCOUT_HTTP_USER_AGENT` | User-Agent sent to Overpass. |
 | `SCOUT_HTTP_TIMEOUT_SECONDS` | Outbound HTTP timeout. |
 | `SCOUT_WEATHER_CACHE_TTL_SECONDS` | Weather cache TTL. |
@@ -106,3 +111,20 @@ runtime dependencies.
 
 Local app works but deployed app cannot load assets
 : Run `npm run build` and confirm `public/dist/` is generated before deploy.
+
+Location search returns `Location provider is rate-limited`
+: OpenStreetMap Overpass returned `429 Too Many Requests`. This usually means a
+broad intent or dense-city radius produced an expensive location query. Scout
+mitigates this by searching named features only, using narrower tags for generic
+photo intents, and expanding from a small radius before trying the full radius.
+If it still happens, retry with a more specific intent such as `sunset
+landscape`, `beach portraits`, or `urban architecture`, or reduce the search
+radius.
+
+Location search returns `Location search is temporarily unavailable`
+: The location provider timed out, failed, or returned an unexpected response.
+Check recent function logs with:
+
+```bash
+npx vercel logs scoutphotography.vercel.app --since 15m --limit 100 --expand
+```
