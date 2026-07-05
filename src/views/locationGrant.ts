@@ -22,16 +22,74 @@ function parseCoordinate(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function createMetric(label: string, value: string): HTMLElement {
+  const metric = document.createElement("div");
+  metric.className = "onboarding-metric";
+  const metricValue = document.createElement("span");
+  metricValue.className = "onboarding-metric__value data";
+  metricValue.textContent = value;
+  const metricLabel = document.createElement("span");
+  metricLabel.className = "onboarding-metric__label";
+  metricLabel.textContent = label;
+  metric.append(metricValue, metricLabel);
+  return metric;
+}
+
 export function renderLocationGrant(root: HTMLElement, handlers: LocationGrantHandlers): void {
   const section = document.createElement("section");
   section.className = "location-state";
 
+  const brand = document.createElement("div");
+  brand.className = "location-state__brand";
+  const brandTitle = document.createElement("h1");
+  brandTitle.textContent = "Scout";
+  const brandCopy = document.createElement("p");
+  brandCopy.textContent = "Plan outdoor shots from real light, weather, and place data.";
+  brand.append(brandTitle, brandCopy);
+
+  const intro = document.createElement("div");
+  intro.className = "location-state__intro";
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "label";
+  eyebrow.textContent = "New scout";
+
   const title = document.createElement("h1");
-  title.textContent = "Start a scout from your location.";
+  title.textContent = "Start with a precise field position.";
 
   const body = document.createElement("p");
   body.textContent =
-    "Use browser location or enter coordinates. Then describe what you want to shoot or do.";
+    "Scout uses your origin to evaluate nearby places against light windows, weather, distance, and access friction.";
+
+  const metrics = document.createElement("div");
+  metrics.className = "onboarding-metrics";
+  metrics.append(
+    createMetric("Recommendations", "3"),
+    createMetric("Forecast", "24h"),
+    createMetric("Session store", "local"),
+  );
+
+  intro.append(eyebrow, title, body, metrics);
+
+  const panel = document.createElement("div");
+  panel.className = "location-panel";
+
+  const panelHeader = document.createElement("div");
+  panelHeader.className = "location-panel__header";
+  const panelTitle = document.createElement("h2");
+  panelTitle.textContent = "Set origin";
+  const panelCopy = document.createElement("p");
+  panelCopy.textContent = "Use browser location for your current position, or enter a destination coordinate.";
+  panelHeader.append(panelTitle, panelCopy);
+
+  const locate = document.createElement("button");
+  locate.type = "button";
+  locate.className = "button button--primary";
+  locate.textContent = "Use my location";
+
+  const divider = document.createElement("div");
+  divider.className = "form-divider";
+  divider.textContent = "Manual coordinate";
 
   const actions = document.createElement("form");
   actions.className = "location-actions";
@@ -66,16 +124,12 @@ export function renderLocationGrant(root: HTMLElement, handlers: LocationGrantHa
 
   actions.append(latField, lngField, manual);
 
-  const locate = document.createElement("button");
-  locate.type = "button";
-  locate.className = "button button--primary";
-  locate.textContent = "Use my location";
-
   const status = document.createElement("p");
   status.className = "status";
   status.setAttribute("role", "status");
 
-  section.append(title, body, locate, actions, status);
+  panel.append(panelHeader, locate, divider, actions, status);
+  section.append(brand, intro, panel);
   root.appendChild(section);
 
   if (!("geolocation" in navigator)) {

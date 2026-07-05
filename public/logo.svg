@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Scout logo">
+  <rect width="64" height="64" rx="14" fill="#191b16"/>
+  <path d="M16 41.5 31.5 14 48 41.5H16Z" fill="#f7efd9"/>
+  <path d="M25.5 37.5 31.5 26.5 38 37.5h-12.5Z" fill="#b99b5f"/>
+  <circle cx="32" cy="41.5" r="5.25" fill="#191b16"/>
+  <circle cx="32" cy="41.5" r="2.25" fill="#b99b5f"/>
+  <path d="M17 48h30" stroke="#b99b5f" stroke-width="3" stroke-linecap="round"/>
+</svg>

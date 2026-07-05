@@ -8,31 +8,49 @@
       name="description"
       content="Location-aware photography and outdoor activity recommendations, grounded in live conditions."
     />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Scout sessions">
         <div class="sidebar__top">
-          <button class="icon-button hamburger" id="sidebar-toggle" type="button" aria-label="Toggle sessions">☰</button>
-          <div class="sidebar__brand">Scout</div>
-          <button class="button button--primary" id="new-session" type="button">New Scout</button>
+          <button class="icon-button hamburger" id="sidebar-toggle" type="button" aria-label="Toggle sessions">+</button>
+          <div class="sidebar__brand"><img src="logo.svg" alt="" /> Scout</div>
         </div>
+        <button class="sidebar__new" id="new-session" type="button"><span>+</span> New Scout</button>
+        <nav class="sidebar__nav" aria-label="Scout workspace">
+          <button class="sidebar__nav-item sidebar__nav-item--active" type="button"><span>?</span> Sessions</button>
+          <button class="sidebar__nav-item" type="button"><span>#</span> Conditions</button>
+          <button class="sidebar__nav-item" type="button"><span>*</span> Preferences</button>
+        </nav>
+        <label class="sidebar__search">
+          <span>Search</span>
+          <input type="search" placeholder="Search scouts" />
+        </label>
+        <div class="sidebar__section-label">Recent</div>
         <div class="sidebar__sessions" id="session-list"></div>
+        <div class="sidebar__profile">
+          <div class="sidebar__avatar"><img src="logo.svg" alt="" /></div>
+          <div>
+            <div class="sidebar__profile-name">Scout</div>
+            <div class="sidebar__profile-meta">Field planning</div>
+          </div>
+        </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div class="topbar__title" id="active-session-title">New Scout</div>
           <div class="topbar__actions">
-            <button class="icon-button" id="settings-open" type="button" aria-label="Open settings">⚙</button>
+            <button class="icon-button" id="settings-open" type="button" aria-label="Open settings">*</button>
           </div>
         </header>
         <section class="content" id="main-content" aria-live="polite"></section>

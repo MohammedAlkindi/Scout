@@ -126,7 +126,7 @@ function renderSidebar(elements: AppElements, state: AppState, renderApp: () => 
     menu.className = "session-menu";
     const trigger = document.createElement("span");
     trigger.className = "icon-button";
-    trigger.textContent = "⋯";
+    trigger.textContent = "...";
     trigger.setAttribute("role", "button");
     trigger.setAttribute("tabindex", "0");
     const popover = document.createElement("span");
