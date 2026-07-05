@@ -97,6 +97,8 @@ class LocationCandidate:
     permit_notes: Optional[str]
     crowd_level: CrowdLevel
     osm_id: int
+    image_url: Optional[str]
+    image_attribution: Optional[str]
 
 
 def _tags_for_intent(intent: str) -> list[tuple[str, str]]:
@@ -237,6 +239,26 @@ def _crowd_level(tags: dict) -> CrowdLevel:
     return CrowdLevel.LOW
 
 
+def _image_info(tags: dict) -> tuple[Optional[str], Optional[str]]:
+    """Best-effort real image URL from OSM/Wikimedia tags.
+
+    OSM commonly stores either a direct `image=https://...` value or a
+    `wikimedia_commons=File:...` value. We deliberately avoid adding a
+    photo API dependency here: when public map metadata has a real image,
+    expose it; otherwise the frontend keeps its generated scouting preview.
+    """
+    image = tags.get("image")
+    if isinstance(image, str) and image.startswith(("https://", "http://")):
+        return image, "Image from OpenStreetMap metadata"
+
+    commons = tags.get("wikimedia_commons")
+    if isinstance(commons, str) and commons.startswith("File:"):
+        filename = commons.removeprefix("File:").replace(" ", "_")
+        return f"https://commons.wikimedia.org/wiki/Special:FilePath/{filename}", "Image from Wikimedia Commons"
+
+    return None, None
+
+
 async def find_locations(
     lat: float, lng: float, radius_miles: float, intent: str, limit: int = 10
 ) -> list[LocationCandidate]:
@@ -274,6 +296,7 @@ async def find_locations(
         if not name:
             continue  # unnamed features make poor recommendations
         permit_required, permit_notes = _permit_info(tags_dict)
+        image_url, image_attribution = _image_info(tags_dict)
         candidates.append(
             LocationCandidate(
                 name=name,
@@ -287,6 +310,8 @@ async def find_locations(
                 permit_notes=permit_notes,
                 crowd_level=_crowd_level(tags_dict),
                 osm_id=element.get("id", 0),
+                image_url=image_url,
+                image_attribution=image_attribution,
             )
         )
 

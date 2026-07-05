@@ -1,190 +1,164 @@
 # Scout
 
-Scout is a location-aware photography and outdoor activity recommendation
-tool. Grant it your location, describe what you want to shoot or do, and it
-reasons over live sun position, weather, and place data to hand back a small
-number of specific, timing-aware recommendations — not a static "top 10
-spots" list.
+Scout is a location-aware field planning app for photographers and outdoor
+creators. It turns a current position and a plain-language intent into a short
+ranked set of places, timing windows, maps, and condition notes.
 
-> "Golden hour at Inspiration Point, 7:42–8:21 PM. 20% cloud cover, light
-> wind, no rain expected. Falls within golden hour; skies suit landscape
-> work; medium crowds expected."
+Instead of returning a generic list of popular spots, Scout scores nearby
+OpenStreetMap candidates against sunlight phase, weather, distance, terrain,
+and access signals. The same recommendation engine is exposed through both a
+FastAPI web app and an MCP server.
+
+## What Scout Does
+
+- Finds nearby candidate locations from OpenStreetMap/Overpass.
+- Calculates sunrise, sunset, golden hour, blue hour, solar noon, and azimuth.
+- Pulls current and hourly weather from Open-Meteo.
+- Scores each place/time window with deterministic service-layer logic.
+- Shows maps, directions, media previews, condition summaries, and ranked cards.
+- Persists local sessions and preferences in the browser.
+- Exposes the same core capabilities as MCP tools for agent workflows.
 
 ## Architecture
 
-Scout is one Python backend serving both an MCP server and an HTTP API, and
-one vanilla-TypeScript frontend, all built around a strict layering rule:
-**business logic lives in one place and both interfaces call it.**
+Scout uses one Python backend and one TypeScript frontend. The important design
+choice is that business logic lives in the service/orchestration layer, not in
+the transport layer.
 
-```
-                       ┌─────────────────────────┐
-                       │  server/orchestration.py │   <- the 5 tools' logic,
-                       │  (caching, scoring glue) │      shared by both layers
-                       └───────────┬─────────────┘
-                    ┌──────────────┴──────────────┐
-          ┌─────────▼─────────┐         ┌─────────▼─────────┐
-          │ server/mcp_server │         │    server/api.py   │
-          │  (FastMCP tools)  │         │  (FastAPI routes)  │
-          └────────────────────┘        └──────────┬─────────┘
-                                                     │ serves
-                                          ┌──────────▼─────────┐
-                                          │   public/ (built    │
-                                          │   from src/*.ts)    │
-                                          └─────────────────────┘
+```text
+Frontend (TypeScript)
+  public/index.html
+  public/styles.css
+  public/dist/*.js
+        |
+        v
+FastAPI HTTP layer
+  server/api.py
+        |
+        v
+Shared orchestration
+  server/orchestration.py
+        |
+        v
+Services
+  server/services/golden_hour.py
+  server/services/weather.py
+  server/services/locations.py
+  server/services/scorer.py
 
-server/services/          <- pure logic + external API integrations,
-  golden_hour.py             called by orchestration.py, never by the
-  scorer.py                  MCP/HTTP layers directly
-  weather.py
-  locations.py
-```
-
-- **`server/services/golden_hour.py`** and **`server/services/scorer.py`**
-  are pure, deterministic, network-free functions — no I/O, fully unit
-  tested (`tests/`).
-- **`server/services/weather.py`** and **`server/services/locations.py`**
-  wrap the two external APIs. Both are rate-limited (`server/rate_limiter.py`)
-  and every failure is translated into a `ScoutError` subclass
-  (`server/errors.py`) before it leaves the service layer — a raw `httpx`
-  exception or an upstream HTML error page never reaches a caller.
-- **`server/cache.py`** is a small in-memory, per-key-locked TTL cache.
-  Weather is cached 10 minutes (it drifts fast); locations are cached 24
-  hours (geography doesn't).
-- **`server/orchestration.py`** implements the five tools end to end
-  (translating between service-layer dataclasses and the shared Pydantic
-  schemas in `server/schemas.py`) and is the *only* place that calls the
-  service layer. Both `mcp_server.py` and `api.py` are thin: they parse
-  transport-specific input, call orchestration, and translate errors.
-- **`server/mcp_server.py`** registers the five MCP tools with
-  [FastMCP](https://github.com/modelcontextprotocol/python-sdk).
-- **`server/api.py`** is a FastAPI app exposing the same five operations as
-  REST endpoints under `/api/*`, plus per-client-IP rate limiting and a
-  structured-error-response middleware. It also serves the compiled
-  frontend as static files, so there's one process and no CORS to configure
-  in production.
-
-### The five MCP tools
-
-| Tool | What it does |
-|---|---|
-| `get_golden_hour` | Sunrise, sunset, golden hour, blue hour, solar noon, and sun azimuth for a location + date |
-| `get_conditions` | Current weather + 24h hourly forecast (cloud cover, wind, visibility, precipitation) |
-| `get_locations` | Candidate locations near a point matching a free-text shot/activity description, with distance, terrain, accessibility, and permit notes |
-| `score_window` | Scores a location + time window 0–100 against live conditions, with a plain-English explanation |
-| `build_recommendation` | Orchestrates all four above into the top 3 location + time-window recommendations |
-
-## Key design decisions
-
-These are deliberate, documented tradeoffs — not oversights:
-
-- **No API keys, anywhere.** Weather comes from
-  [Open-Meteo](https://open-meteo.com) and locations from OpenStreetMap's
-  [Overpass API](https://overpass-api.de) — both free and keyless. This was
-  a scope decision, not a limitation: the project runs with zero signup
-  friction. See `server/config.py` for the (non-secret) environment
-  variables that *do* exist — base URLs, timeouts, cache TTLs, rate limits.
-- **All timestamps are UTC.** `golden_hour.py` has no timezone database
-  (no `timezonefinder`/`pytz` dependency) to derive a location's IANA zone
-  from lat/lng alone. The frontend already has the user's local clock via
-  the browser, so it converts UTC → local for display (`src/format.ts`).
-- **Azimuth is a compass bearing (0=N, 90=E, 180=S, 270=W).** The underlying
-  solar-position formulas naturally produce azimuth from South; Scout
-  rotates it for the more common photography/navigation convention.
-- **"Permit required" and "crowd level" are best-effort heuristics** inferred
-  from OpenStreetMap tags (`access`, `fee`, `protect_class`, notability tags
-  like `wikidata`). OSM has no real foot-traffic or permit-office data —
-  every candidate should be read as "worth checking," not "verified."
-  (`server/services/locations.py`)
-- **Recommendation scoring is capacity-scoped, not location-scoped:**
-  `build_recommendation` scores every nearby candidate against the
-  *origin's* weather rather than fetching per-candidate forecasts, since
-  cloud cover/wind don't meaningfully vary across a ~15 mile radius.
-- **A time window's light phase is classified by its midpoint**
-  (`golden_hour.classify_window`), not as a blend of overlapping phases —
-  a deliberate simplification documented in code.
-
-## Setup
-
-### Backend
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
-
-pip install -r requirements.txt
-
-# Run the HTTP API + frontend (build the frontend first, see below)
-uvicorn server.api:app --reload --port 8420
-
-# ...or run the MCP server standalone over stdio
-python -m server.mcp_server
+MCP server
+  server/mcp_server.py
+        |
+        v
+Shared orchestration
 ```
 
-No environment variables are required to run Scout — see
-`server/config.py` for the optional ones (timeouts, cache TTLs, rate
-limits, alternate base URLs for the two upstream APIs).
+Both `server/api.py` and `server/mcp_server.py` call
+`server/orchestration.py`, which keeps the MCP and web experiences aligned.
 
-### Frontend
+## MCP Tools
 
-```bash
-npm install
-npm run build      # tsc -> public/dist/*.js
-npm run watch       # or: rebuild on change during development
-```
+| Tool | Purpose |
+| --- | --- |
+| `get_golden_hour` | Returns sun and light-phase windows for a location and date. |
+| `get_conditions` | Returns current weather and a 24-hour forecast. |
+| `get_locations` | Finds nearby location candidates for a scouting intent. |
+| `score_window` | Scores a location/time window against conditions. |
+| `build_recommendation` | Produces the ranked end-to-end recommendation set. |
 
-Then open `http://127.0.0.1:8420/` (served by the FastAPI app above) — no
-separate frontend server or bundler.
+## Data Sources
 
-## Tests
+- Weather: Open-Meteo, no API key required.
+- Places: OpenStreetMap through Overpass, no API key required.
+- Media: OpenStreetMap image tags and Wikimedia Commons metadata when present.
+- Maps: OpenStreetMap embed and direction links.
 
-```bash
-pytest tests/ -v
-pytest tests/ --cov=server.services.scorer --cov=server.services.golden_hour --cov-report=term-missing
+When a real place image is unavailable, the frontend renders a restrained
+generated scouting preview so the layout remains useful without pretending to
+have photographic evidence.
 
-npm run typecheck   # tsc --noEmit, strict mode, zero `any`
-```
+## Project Layout
 
-`test_golden_hour.py` and `test_scorer.py` cover the two pure-logic modules
-at ~98% line coverage using two kinds of assertions: internal invariants
-that hold regardless of any specific reference value (sunrise-before-noon-
-before-sunset, symmetry around solar noon, azimuth ranges, deterministic
-scoring), and a few broad sanity bounds against widely-known facts (e.g.
-"London's midsummer sunrise is pre-dawn UTC") since exact minute-level
-reference values can't be independently verified without network access
-while writing the tests.
-
-## Project layout
-
-```
+```text
 server/
-  mcp_server.py          MCP tool definitions (FastMCP)
-  api.py                 HTTP API (FastAPI), serves public/ as static files
-  orchestration.py        shared logic for all 5 tools; both layers call this
-  schemas.py              Pydantic request/response models (shared)
-  cache.py                TTL cache
-  rate_limiter.py         token-bucket rate limiting (outbound + inbound)
-  errors.py               structured error types
-  config.py               environment variable configuration
+  api.py                 FastAPI HTTP app and static frontend serving
+  mcp_server.py          MCP tool registration
+  orchestration.py       Shared tool/recommendation flow
+  schemas.py             Pydantic request and response models
+  cache.py               In-memory TTL cache
+  rate_limiter.py        Inbound and outbound rate limiting
+  errors.py              Structured application errors
   services/
-    golden_hour.py        sun position math (pure, no deps)
-    scorer.py              condition scoring (pure)
-    weather.py              Open-Meteo integration
-    locations.py            Overpass/OSM integration
+    golden_hour.py       Sun position and light-window calculations
+    weather.py           Open-Meteo integration
+    locations.py         Overpass/OpenStreetMap integration
+    scorer.py            Deterministic recommendation scoring
+src/
+  main.ts                App bootstrap and view routing
+  types.ts               Shared frontend response types
+  api.ts                 Typed fetch wrapper
+  settings.ts            Preferences panel and theme handling
+  views/                 Location, intent, and results views
+public/
+  index.html
+  styles.css             Design tokens and app UI
+  dist/                  TypeScript output from `npm run build`
 tests/
   test_golden_hour.py
   test_scorer.py
-src/
-  types.ts                shared TypeScript interfaces (mirror schemas.py)
-  api.ts                  typed fetch wrapper
-  format.ts               time/phase/distance formatting helpers
-  main.ts                 entry point / view router
-  views/
-    locationGrant.ts
-    intentInput.ts
-    results.ts
-public/
-  index.html
-  styles.css              design tokens + component styles
-  dist/                   compiled output (npm run build; gitignored)
 ```
+
+## Running Locally
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+npm install
+npm run build
+
+uvicorn server.api:app --reload --port 8420
+```
+
+Open `http://127.0.0.1:8420/`.
+
+To run the MCP server directly:
+
+```bash
+python -m server.mcp_server
+```
+
+## Configuration
+
+Scout runs without required secrets. Optional environment variables are defined
+in `server/config.py` for upstream base URLs, timeouts, cache TTLs, and rate
+limits.
+
+Do not commit `.env` files or credentials.
+
+## Verification
+
+```bash
+npm run typecheck
+npm run build
+pytest tests/test_scorer.py tests/test_golden_hour.py -q
+```
+
+The Python tests focus on the deterministic core: golden-hour calculations and
+condition scoring. TypeScript runs in strict mode and the project does not use
+`any` types.
+
+## Product Status
+
+Scout is a polished prototype moving toward production readiness. The core
+technical shape is solid: transport layers are thin, scoring is deterministic,
+external API concerns are isolated, and the frontend is TypeScript-first.
+
+The next maturity steps are:
+
+- Add end-to-end tests for the web recommendation flow.
+- Add structured observability for upstream API latency and failures.
+- Add optional provider abstraction for richer place imagery.
+- Add deployment configuration and environment documentation.
+- Add accessibility and responsive screenshot checks to CI.

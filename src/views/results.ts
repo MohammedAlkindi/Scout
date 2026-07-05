@@ -47,6 +47,17 @@ function phaseGradientClass(item: RecommendationItem): string {
 }
 
 function buildPlaceImage(item: RecommendationItem): HTMLImageElement {
+  const imageUrl = item.image_url;
+  if (typeof imageUrl === "string" && imageUrl.trim().length > 0) {
+    const realImage = document.createElement("img");
+    realImage.className = "place-photo place-photo--real";
+    realImage.alt = `${item.location_name} location photo`;
+    realImage.loading = "lazy";
+    realImage.referrerPolicy = "no-referrer";
+    realImage.src = imageUrl;
+    return realImage;
+  }
+
   const title = escapeSvgText(item.location_name);
   const terrain = escapeSvgText(item.terrain_type);
   const phase = escapeSvgText(formatLightPhase(item.light_phase));
@@ -105,7 +116,10 @@ function buildMedia(item: RecommendationItem): HTMLElement {
   photoWrap.className = "media-panel media-panel--photo";
   const image = buildPlaceImage(item);
   const caption = document.createElement("figcaption");
-  caption.textContent = "Visual scouting preview";
+  caption.textContent =
+    typeof item.image_attribution === "string" && item.image_attribution.trim().length > 0
+      ? item.image_attribution
+      : "Visual scouting preview";
   photoWrap.append(image, caption);
 
   const mapWrap = document.createElement("div");
@@ -120,7 +134,16 @@ function buildMedia(item: RecommendationItem): HTMLElement {
   mapLink.target = "_blank";
   mapLink.rel = "noreferrer";
   mapLink.textContent = "Open map";
-  mapWrap.append(map, mapLink);
+  const directionsLink = document.createElement("a");
+  directionsLink.className = "map-link-secondary";
+  directionsLink.href = `https://www.openstreetmap.org/directions?to=${item.latitude}%2C${item.longitude}`;
+  directionsLink.target = "_blank";
+  directionsLink.rel = "noreferrer";
+  directionsLink.textContent = "Directions";
+  const coordinateLabel = document.createElement("span");
+  coordinateLabel.className = "map-coordinate data";
+  coordinateLabel.textContent = `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`;
+  mapWrap.append(map, coordinateLabel, mapLink, directionsLink);
 
   media.append(photoWrap, mapWrap);
   return media;
@@ -141,7 +164,7 @@ function tile(label: string, value: string): HTMLElement {
 
 function buildCard(item: RecommendationItem, index: number, settings: Settings): HTMLElement {
   const card = document.createElement("article");
-  card.className = `result-card result-card--${item.light_phase}`;
+  card.className = `result-card result-card--${item.light_phase}${index === 0 ? " result-card--primary" : ""}`;
   card.style.setProperty("--stagger-index", String(index));
 
   const top = document.createElement("div");
@@ -192,6 +215,20 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
 }
 
 export function renderResults(root: HTMLElement, response: RecommendationResponse, settings: Settings): void {
+  const top = response.recommendations[0];
+  if (top !== undefined) {
+    const summary = document.createElement("section");
+    summary.className = "results-summary";
+    const title = document.createElement("h1");
+    title.textContent = "Best scouting window found";
+    const body = document.createElement("p");
+    body.textContent = `${top.location_name} leads because it combines ${formatLightPhase(
+      top.light_phase,
+    ).toLowerCase()} timing, ${formatDistance(top.distance_miles, settings)} travel distance, and a ${top.score}/100 score.`;
+    summary.append(title, body);
+    root.appendChild(summary);
+  }
+
   const list = document.createElement("section");
   list.className = "results-list";
   list.setAttribute("aria-label", "Scout recommendations");

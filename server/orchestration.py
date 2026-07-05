@@ -173,6 +173,8 @@ def _candidate_to_schema(candidate: LocationCandidate) -> LocationCandidateSchem
         permit_required=candidate.permit_required,
         permit_notes=candidate.permit_notes,
         crowd_level=candidate.crowd_level,
+        image_url=candidate.image_url,
+        image_attribution=candidate.image_attribution,
     )
 
 
@@ -402,6 +404,8 @@ async def build_recommendation(
             advice=item.result.explanation,
             permit_required=item.candidate.permit_required,
             permit_notes=item.candidate.permit_notes,
+            image_url=item.candidate.image_url,
+            image_attribution=item.candidate.image_attribution,
         )
         for rank, item in enumerate(top, start=1)
     ]

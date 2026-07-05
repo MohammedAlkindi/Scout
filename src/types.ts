@@ -34,6 +34,8 @@ export interface RecommendationItem {
   advice: string;
   permit_required: boolean;
   permit_notes: string | null;
+  image_url: string | null;
+  image_attribution: string | null;
 }
 
 export interface RecommendationResponse {

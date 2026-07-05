@@ -2,6 +2,7 @@ import { fetchRecommendation } from "./api.js";
 import { applySettings, initSettingsPanel } from "./settings.js";
 import {
   createSession,
+  createDemoSession,
   deleteSession,
   duplicateSession,
   loadSessions,
@@ -246,16 +247,7 @@ function renderActiveSession(elements: AppElements, state: AppState, renderApp: 
     },
   });
 
-  if (session.results === null) {
-    const empty = document.createElement("section");
-    empty.className = "empty-state";
-    const title = document.createElement("h1");
-    title.textContent = "Describe what you want to shoot or do.";
-    const body = document.createElement("p");
-    body.textContent = "Scout will find the right place and time.";
-    empty.append(title, body);
-    wrapper.appendChild(empty);
-  } else {
+  if (session.results !== null) {
     renderResults(wrapper, session.results, state.settings);
   }
 }
@@ -334,12 +326,13 @@ function main(): void {
   const elements = getElements();
   const sessions = loadSessions();
   const firstSession = sessions[0] ?? createSession();
+  const initialSessions = sessions.length === 0 ? [firstSession, createDemoSession()] : sessions;
   if (sessions.length === 0) {
-    saveSessions([firstSession]);
+    saveSessions(initialSessions);
   }
 
   const state: AppState = {
-    sessions: sessions.length === 0 ? [firstSession] : sessions,
+    sessions: initialSessions,
     activeSessionId: firstSession.id,
     settings: loadSettings(),
     activeNav: "sessions",

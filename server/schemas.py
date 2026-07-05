@@ -72,6 +72,8 @@ class LocationCandidateSchema(BaseModel):
     permit_required: bool
     permit_notes: Optional[str] = None
     crowd_level: CrowdLevel
+    image_url: Optional[str] = None
+    image_attribution: Optional[str] = None
 
 
 class LocationsResponse(BaseModel):
@@ -110,6 +112,8 @@ class RecommendationItem(BaseModel):
     advice: str
     permit_required: bool
     permit_notes: Optional[str] = None
+    image_url: Optional[str] = None
+    image_attribution: Optional[str] = None
 
 
 class RecommendationResponse(BaseModel):
