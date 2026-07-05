@@ -80,7 +80,7 @@ export function initSettingsPanel(options: SettingsPanelOptions): { render: (set
     header.className = "settings-panel__header";
     const title = document.createElement("h1");
     title.textContent = "Settings";
-    const close = button("×", "icon-button");
+    const close = button("x", "icon-button");
     close.setAttribute("aria-label", "Close settings");
     close.addEventListener("click", () => setOpen(options.panel, options.overlay, false));
     header.append(title, close);

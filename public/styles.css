@@ -430,8 +430,18 @@ a {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  width: 100%;
   padding: var(--space-5);
   border-top: var(--border-width) solid var(--color-sidebar-border);
+  background: transparent;
+  color: var(--color-sidebar-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar__profile:hover,
+.sidebar__profile:focus-visible {
+  background: var(--color-sidebar-raised);
 }
 
 .sidebar__avatar {
@@ -836,6 +846,60 @@ a {
   gap: var(--space-4);
 }
 
+.workspace-panel {
+  display: grid;
+  gap: var(--space-5);
+  max-width: var(--card-max);
+  padding: var(--panel-padding);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface-raised), transparent 4%);
+  box-shadow: var(--shadow-panel);
+}
+
+.workspace-panel h1 {
+  font-size: var(--text-xl);
+  line-height: var(--line-tight);
+}
+
+.workspace-panel > p {
+  max-width: var(--state-copy-max);
+  color: var(--color-text-secondary);
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.insight-card {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--border-accent-width) solid var(--color-accent-grey);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.insight-card--golden_hour {
+  border-left-color: var(--color-accent-golden);
+}
+
+.insight-card--blue_hour {
+  border-left-color: var(--color-accent-blue);
+}
+
+.insight-card h2 {
+  font-size: var(--text-base);
+}
+
+.insight-card p {
+  color: var(--color-text-secondary);
+}
+
 .result-card {
   display: grid;
   gap: var(--space-4);
@@ -1134,9 +1198,20 @@ a {
   }
 
   .sidebar:not(.sidebar--open) .sidebar__brand,
+  .sidebar:not(.sidebar--open) .sidebar__new,
+  .sidebar:not(.sidebar--open) .sidebar__nav,
+  .sidebar:not(.sidebar--open) .sidebar__search,
+  .sidebar:not(.sidebar--open) .sidebar__section-label,
   .sidebar:not(.sidebar--open) .session-button__text,
-  .sidebar:not(.sidebar--open) .session-menu {
+  .sidebar:not(.sidebar--open) .session-menu,
+  .sidebar:not(.sidebar--open) .sidebar__profile-name,
+  .sidebar:not(.sidebar--open) .sidebar__profile-meta {
     display: none;
+  }
+
+  .sidebar:not(.sidebar--open) .sidebar__profile {
+    justify-content: center;
+    padding: var(--space-3);
   }
 
   .hamburger {
@@ -1156,6 +1231,7 @@ a {
   .location-actions,
   .result-card__grid,
   .result-card__media,
+  .insight-grid,
   .location-state,
   .onboarding-metrics {
     grid-template-columns: 1fr;

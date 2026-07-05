@@ -22,6 +22,9 @@ interface AppElements {
   sidebarToggle: HTMLButtonElement;
   sessionList: HTMLElement;
   newSession: HTMLButtonElement;
+  navSessions: HTMLButtonElement;
+  navConditions: HTMLButtonElement;
+  navPreferences: HTMLButtonElement;
   mainContent: HTMLElement;
   activeTitle: HTMLElement;
   settingsPanel: HTMLElement;
@@ -29,10 +32,13 @@ interface AppElements {
   settingsOpen: HTMLButtonElement;
 }
 
+type ActiveNav = "sessions" | "conditions" | "preferences";
+
 interface AppState {
   sessions: Session[];
   activeSessionId: string;
   settings: Settings;
+  activeNav: ActiveNav;
 }
 
 function requireElement<T extends HTMLElement>(id: string, constructor: { new (): T }): T {
@@ -49,6 +55,9 @@ function getElements(): AppElements {
     sidebarToggle: requireElement("sidebar-toggle", HTMLButtonElement),
     sessionList: requireElement("session-list", HTMLElement),
     newSession: requireElement("new-session", HTMLButtonElement),
+    navSessions: requireElement("nav-sessions", HTMLButtonElement),
+    navConditions: requireElement("nav-conditions", HTMLButtonElement),
+    navPreferences: requireElement("nav-preferences", HTMLButtonElement),
     mainContent: requireElement("main-content", HTMLElement),
     activeTitle: requireElement("active-session-title", HTMLElement),
     settingsPanel: requireElement("settings-panel", HTMLElement),
@@ -87,6 +96,13 @@ function updateSession(state: AppState, session: Session): void {
   state.activeSessionId = session.id;
 }
 
+function setActiveNav(elements: AppElements, state: AppState, activeNav: ActiveNav): void {
+  state.activeNav = activeNav;
+  elements.navSessions.classList.toggle("sidebar__nav-item--active", activeNav === "sessions");
+  elements.navConditions.classList.toggle("sidebar__nav-item--active", activeNav === "conditions");
+  elements.navPreferences.classList.toggle("sidebar__nav-item--active", activeNav === "preferences");
+}
+
 function createMenuButton(label: string, onClick: () => void): HTMLButtonElement {
   const item = document.createElement("button");
   item.type = "button";
@@ -107,6 +123,7 @@ function renderSidebar(elements: AppElements, state: AppState, renderApp: () => 
     row.className = `session-button${session.id === state.activeSessionId ? " session-button--active" : ""}`;
     row.addEventListener("click", () => {
       state.activeSessionId = session.id;
+      setActiveNav(elements, state, "sessions");
       elements.sidebar.classList.remove("sidebar--open");
       renderApp();
     });
@@ -173,12 +190,23 @@ function renderSidebar(elements: AppElements, state: AppState, renderApp: () => 
 
 function renderActiveSession(elements: AppElements, state: AppState, renderApp: () => void): void {
   const session = activeSession(state);
-  elements.activeTitle.textContent = session.name;
+  elements.activeTitle.textContent =
+    state.activeNav === "conditions" ? "Conditions" : state.activeNav === "preferences" ? "Preferences" : session.name;
   elements.mainContent.textContent = "";
 
   const wrapper = document.createElement("div");
   wrapper.className = "session-main";
   elements.mainContent.appendChild(wrapper);
+
+  if (state.activeNav === "conditions") {
+    renderConditionsView(wrapper, session);
+    return;
+  }
+
+  if (state.activeNav === "preferences") {
+    renderPreferencesView(wrapper, state.settings);
+    return;
+  }
 
   if (!sessionHasLocation(session)) {
     renderLocationGrant(wrapper, {
@@ -232,6 +260,76 @@ function renderActiveSession(elements: AppElements, state: AppState, renderApp: 
   }
 }
 
+function renderConditionsView(root: HTMLElement, session: Session): void {
+  const panel = document.createElement("section");
+  panel.className = "workspace-panel";
+
+  const title = document.createElement("h1");
+  title.textContent = "Condition intelligence";
+  const body = document.createElement("p");
+  body.textContent =
+    session.results === null
+      ? "Run a scout to see weather, timing, and light-condition summaries for each recommended place."
+      : "Review the current condition signals Scout used to rank this session.";
+  panel.append(title, body);
+
+  if (session.results !== null) {
+    const grid = document.createElement("div");
+    grid.className = "insight-grid";
+    for (const item of session.results.recommendations) {
+      const card = document.createElement("article");
+      card.className = `insight-card insight-card--${item.light_phase}`;
+      const cardTitle = document.createElement("h2");
+      cardTitle.textContent = item.location_name;
+      const score = document.createElement("p");
+      score.className = "data";
+      score.textContent = `${item.score}/100`;
+      const summary = document.createElement("p");
+      summary.textContent = item.conditions_summary;
+      card.append(cardTitle, score, summary);
+      grid.appendChild(card);
+    }
+    panel.appendChild(grid);
+  }
+
+  root.appendChild(panel);
+}
+
+function renderPreferencesView(root: HTMLElement, settings: Settings): void {
+  const panel = document.createElement("section");
+  panel.className = "workspace-panel";
+
+  const title = document.createElement("h1");
+  title.textContent = "Preferences";
+  const body = document.createElement("p");
+  body.textContent = "Use the settings drawer from the bottom-left Scout profile to adjust defaults.";
+
+  const grid = document.createElement("div");
+  grid.className = "insight-grid";
+  const rows: ReadonlyArray<readonly [string, string]> = [
+    ["Units", settings.units],
+    ["Radius", `${settings.radiusMiles} mi`],
+    ["Time", settings.timeFormat],
+    ["Theme", settings.theme],
+    ["Activities", settings.activityTypes.join(", ") || "none"],
+  ];
+
+  for (const [label, value] of rows) {
+    const card = document.createElement("article");
+    card.className = "insight-card";
+    const cardTitle = document.createElement("h2");
+    cardTitle.textContent = label;
+    const cardValue = document.createElement("p");
+    cardValue.className = "data";
+    cardValue.textContent = value;
+    card.append(cardTitle, cardValue);
+    grid.appendChild(card);
+  }
+
+  panel.append(title, body, grid);
+  root.appendChild(panel);
+}
+
 function main(): void {
   const elements = getElements();
   const sessions = loadSessions();
@@ -244,9 +342,11 @@ function main(): void {
     sessions: sessions.length === 0 ? [firstSession] : sessions,
     activeSessionId: firstSession.id,
     settings: loadSettings(),
+    activeNav: "sessions",
   };
 
   const renderApp = (): void => {
+    setActiveNav(elements, state, state.activeNav);
     renderSidebar(elements, state, renderApp);
     renderActiveSession(elements, state, renderApp);
   };
@@ -255,7 +355,24 @@ function main(): void {
     const session = createSession();
     state.sessions = [session, ...state.sessions];
     state.activeSessionId = session.id;
+    setActiveNav(elements, state, "sessions");
     saveSessions(state.sessions);
+    renderApp();
+  });
+
+  elements.navSessions.addEventListener("click", () => {
+    setActiveNav(elements, state, "sessions");
+    renderApp();
+  });
+
+  elements.navConditions.addEventListener("click", () => {
+    setActiveNav(elements, state, "conditions");
+    renderApp();
+  });
+
+  elements.navPreferences.addEventListener("click", () => {
+    setActiveNav(elements, state, "preferences");
+    elements.settingsOpen.click();
     renderApp();
   });
 

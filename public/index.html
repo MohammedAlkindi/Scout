@@ -27,9 +27,9 @@
         </div>
         <button class="sidebar__new" id="new-session" type="button"><span>+</span> New Scout</button>
         <nav class="sidebar__nav" aria-label="Scout workspace">
-          <button class="sidebar__nav-item sidebar__nav-item--active" type="button"><span>?</span> Sessions</button>
-          <button class="sidebar__nav-item" type="button"><span>#</span> Conditions</button>
-          <button class="sidebar__nav-item" type="button"><span>*</span> Preferences</button>
+          <button class="sidebar__nav-item sidebar__nav-item--active" id="nav-sessions" type="button"><span>?</span> Sessions</button>
+          <button class="sidebar__nav-item" id="nav-conditions" type="button"><span>#</span> Conditions</button>
+          <button class="sidebar__nav-item" id="nav-preferences" type="button"><span>*</span> Preferences</button>
         </nav>
         <label class="sidebar__search">
           <span>Search</span>
@@ -37,21 +37,19 @@
         </label>
         <div class="sidebar__section-label">Recent</div>
         <div class="sidebar__sessions" id="session-list"></div>
-        <div class="sidebar__profile">
+        <button class="sidebar__profile" id="settings-open" type="button" aria-label="Open settings">
           <div class="sidebar__avatar"><img src="logo.svg" alt="" /></div>
           <div>
             <div class="sidebar__profile-name">Scout</div>
             <div class="sidebar__profile-meta">Field planning</div>
           </div>
-        </div>
+        </button>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div class="topbar__title" id="active-session-title">New Scout</div>
-          <div class="topbar__actions">
-            <button class="icon-button" id="settings-open" type="button" aria-label="Open settings">*</button>
-          </div>
+          <div class="topbar__actions"></div>
         </header>
         <section class="content" id="main-content" aria-live="polite"></section>
       </main>
