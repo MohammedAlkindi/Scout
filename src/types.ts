@@ -63,8 +63,29 @@ export interface Coordinates {
   longitude: number;
 }
 
-/** Discriminated union of the app's three top-level screens. */
-export type AppView =
-  | { readonly kind: "location-grant" }
-  | { readonly kind: "intent-input"; readonly coordinates: Coordinates }
-  | { readonly kind: "results"; readonly coordinates: Coordinates; readonly response: RecommendationResponse };
+export interface SessionLocation {
+  lat: number;
+  lng: number;
+  label: string;
+}
+
+export interface Session {
+  id: string;
+  createdAt: string;
+  location: SessionLocation;
+  intent: string;
+  results: RecommendationResponse | null;
+  name: string;
+}
+
+export type Units = "metric" | "imperial";
+export type TimeFormat = "12h" | "24h";
+export type ThemePreference = "system" | "dark" | "light";
+
+export interface Settings {
+  units: Units;
+  radiusMiles: number;
+  activityTypes: string[];
+  timeFormat: TimeFormat;
+  theme: ThemePreference;
+}
