@@ -1,0 +1,170 @@
+# Scout Architecture
+
+Scout is built around one shared recommendation engine with two thin
+transport layers:
+
+- FastAPI for the browser application.
+- MCP for agent/tool workflows.
+
+The important rule is that recommendation logic does not live in either
+transport layer. HTTP routes and MCP tools validate inputs, call
+`server/orchestration.py`, and return typed responses.
+
+## System Shape
+
+```text
+Browser UI
+  src/*.ts
+  public/index.html
+  public/styles.css
+        |
+        v
+FastAPI routes
+  server/api.py
+        |
+        v
+Shared orchestration
+  server/orchestration.py
+        |
+        v
+Service layer
+  server/services/golden_hour.py
+  server/services/weather.py
+  server/services/locations.py
+  server/services/scorer.py
+
+MCP client
+        |
+        v
+MCP tools
+  server/mcp_server.py
+        |
+        v
+Shared orchestration
+```
+
+## Backend Boundaries
+
+`server/api.py`
+: Defines the HTTP API, request models, rate limiting dependency, structured
+error handlers, and static file mount. It should stay transport-focused.
+
+`server/mcp_server.py`
+: Registers MCP tools and returns the same typed schemas used by the HTTP API.
+It should not duplicate recommendation logic.
+
+`server/orchestration.py`
+: Coordinates validation, caching, service calls, scoring, ranking, response
+shaping, confidence labels, reason tags, and caveats.
+
+`server/services/golden_hour.py`
+: Pure solar-position math. No network calls, no cache, deterministic tests.
+
+`server/services/weather.py`
+: Open-Meteo integration. Handles provider response parsing and safe upstream
+errors.
+
+`server/services/locations.py`
+: OpenStreetMap/Overpass integration. Converts tags into terrain, access,
+permit, crowd, and image metadata signals.
+
+`server/services/scorer.py`
+: Pure scoring model. This is intentionally network-free so the ranking logic
+can be tested without mocks.
+
+## Frontend Boundaries
+
+`src/main.ts`
+: Application bootstrap, session lifecycle, navigation, and top-level render
+flow.
+
+`src/api.ts`
+: Typed fetch wrapper for the Scout HTTP API.
+
+`src/storage.ts`
+: Local browser persistence for sessions and preferences.
+
+`src/settings.ts`
+: Preferences panel behavior and theme handling.
+
+`src/views/*`
+: UI rendering for the location, intent, and results screens.
+
+`src/types.ts`
+: Shared TypeScript types mirroring backend response contracts.
+
+`public/styles.css`
+: Design tokens, layout, states, and responsive behavior.
+
+`public/dist/`
+: TypeScript output. Do not edit this directory manually.
+
+## Request Flow
+
+1. The browser sends a location, intent, radius, and optional shot type to
+   `POST /api/recommendation`.
+2. FastAPI validates the request and applies client-IP rate limiting.
+3. Orchestration fetches candidate places from Overpass using an intent-derived
+   tag query.
+4. Orchestration fetches current and hourly weather from Open-Meteo.
+5. Solar windows are computed locally using deterministic math.
+6. Each candidate is scored against each upcoming light window.
+7. The best window per candidate is ranked.
+8. The response includes score breakdowns, confidence, reason tags, caveats,
+   map coordinates, and image metadata when available.
+9. The frontend renders a map-first overview and recommendation cards.
+
+## Caching And Rate Limiting
+
+Scout uses in-process TTL caches:
+
+- Weather: short TTL because conditions change quickly.
+- Locations: longer TTL because geography changes slowly.
+
+Scout also has token-bucket rate limiters:
+
+- Inbound HTTP API rate limiting per client IP.
+- Outbound weather rate limiting.
+- Outbound location search rate limiting.
+
+This is enough for a public prototype and small deployment. A multi-instance
+production deployment would eventually move cache/rate-limit state to a shared
+store.
+
+## Data Sources
+
+Scout deliberately uses keyless public data sources:
+
+- Open-Meteo for weather.
+- OpenStreetMap/Overpass for places.
+- OSM `image` tags and Wikimedia Commons file metadata for place imagery.
+- OpenStreetMap embeds and links for maps/directions.
+
+This keeps local setup simple and avoids committed credentials. The tradeoff is
+that place metadata quality varies by region.
+
+## Error Handling
+
+Raw provider errors should not reach the client. Service modules translate
+network failures, malformed provider payloads, and empty result sets into
+Scout-specific errors. The HTTP layer maps those to small JSON responses:
+
+```json
+{ "error": "Location search is temporarily unavailable." }
+```
+
+Unexpected exceptions are logged server-side and returned as a generic user-safe
+message.
+
+## Extension Points
+
+Good next places to extend the architecture:
+
+- Add a provider interface for paid place imagery while keeping OSM as the
+  default.
+- Add observability around upstream latency, rate limits, empty searches, and
+  recommendation score distributions.
+- Add account-backed saved scouts behind a storage layer without changing the
+  scoring model.
+- Add visual regression testing around the map-first result page.
+

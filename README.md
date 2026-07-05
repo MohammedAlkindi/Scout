@@ -1,13 +1,15 @@
 # Scout
 
 Scout is a location-aware field planning app for photographers and outdoor
-creators. It turns a current position and a plain-language intent into a short
-ranked set of places, timing windows, maps, and condition notes.
+creators. It turns a current position and a plain-language intent into a ranked
+map of places, timing windows, condition notes, and local verification caveats.
 
 Instead of returning a generic list of popular spots, Scout scores nearby
 OpenStreetMap candidates against sunlight phase, weather, distance, terrain,
 and access signals. The same recommendation engine is exposed through both a
 FastAPI web app and an MCP server.
+
+Live demo: [https://scout-six-beta.vercel.app](https://scout-six-beta.vercel.app)
 
 ## What Scout Does
 
@@ -15,8 +17,10 @@ FastAPI web app and an MCP server.
 - Calculates sunrise, sunset, golden hour, blue hour, solar noon, and azimuth.
 - Pulls current and hourly weather from Open-Meteo.
 - Scores each place/time window with deterministic service-layer logic.
-- Shows maps, directions, media previews, condition summaries, and ranked cards.
+- Shows a map-first result view with ranked pins, cards, directions, and media previews.
+- Explains each recommendation with score breakdowns, confidence, reason tags, and caveats.
 - Persists local sessions and preferences in the browser.
+- Prevents duplicate untouched sessions when users repeatedly start a new scout.
 - Exposes the same core capabilities as MCP tools for agent workflows.
 
 ## Architecture
@@ -24,6 +28,8 @@ FastAPI web app and an MCP server.
 Scout uses one Python backend and one TypeScript frontend. The important design
 choice is that business logic lives in the service/orchestration layer, not in
 the transport layer.
+
+For a deeper technical walkthrough, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```text
 Frontend (TypeScript)
@@ -77,6 +83,18 @@ When a real place image is unavailable, the frontend renders a restrained
 generated scouting preview so the layout remains useful without pretending to
 have photographic evidence.
 
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | System boundaries, data flow, caching, and extension points. |
+| [API](docs/API.md) | HTTP endpoints, request shapes, response notes, and enums. |
+| [Scoring](docs/SCORING.md) | Recommendation model, weights, confidence, and caveats. |
+| [MCP Setup](docs/MCP_SETUP.md) | Local MCP server setup and example tool prompts. |
+| [Deployment](docs/DEPLOYMENT.md) | Vercel routing, build, environment variables, and verification. |
+| [Development](docs/DEVELOPMENT.md) | Local setup, commands, tests, and contribution workflow. |
+| [Roadmap](docs/ROADMAP.md) | Near-term maturity work and future product directions. |
+
 ## Project Layout
 
 ```text
@@ -106,6 +124,20 @@ public/
 tests/
   test_golden_hour.py
   test_scorer.py
+  e2e/
+    scout.spec.ts        Browser smoke/regression tests
+api/
+  index.py               Vercel ASGI entrypoint
+docs/
+  ARCHITECTURE.md        System design and extension points
+  API.md                 HTTP API reference
+  SCORING.md             Recommendation model details
+  MCP_SETUP.md           MCP setup guide
+  DEPLOYMENT.md          Deployment guide
+  DEVELOPMENT.md         Development guide
+  ROADMAP.md             Product and technical roadmap
+.github/workflows/
+  ci.yml                 Python, TypeScript, build, and browser smoke tests
 ```
 
 ## Running Locally
@@ -129,6 +161,20 @@ To run the MCP server directly:
 python -m server.mcp_server
 ```
 
+See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) for client configuration and example prompts.
+
+## Deployment
+
+Scout includes a Vercel deployment configuration:
+
+- `vercel.json` builds the TypeScript frontend, serves `public`, redirects `/` to `/index.html`, and routes `/api/*` to FastAPI.
+- `api/index.py` exposes the FastAPI app as the ASGI entrypoint.
+- `.vercelignore` excludes local secrets, virtualenvs, node modules, and test output.
+
+The app does not require API keys for its default data sources.
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment commands and smoke checks.
+
 ## Configuration
 
 Scout runs without required secrets. Optional environment variables are defined
@@ -142,23 +188,28 @@ Do not commit `.env` files or credentials.
 ```bash
 npm run typecheck
 npm run build
+npm run test:e2e
 pytest tests/test_scorer.py tests/test_golden_hour.py -q
 ```
 
 The Python tests focus on the deterministic core: golden-hour calculations and
 condition scoring. TypeScript runs in strict mode and the project does not use
-`any` types.
+`any` types. Playwright covers the main UI flow and a regression for repeated
+New Scout clicks creating duplicate empty sessions.
+
+GitHub Actions runs the full verification set on pushes to `main` and pull
+requests.
 
 ## Product Status
 
 Scout is a polished prototype moving toward production readiness. The core
 technical shape is solid: transport layers are thin, scoring is deterministic,
-external API concerns are isolated, and the frontend is TypeScript-first.
+external API concerns are isolated, CI is in place, and the frontend is
+TypeScript-first.
 
-The next maturity steps are:
+Remaining maturity steps:
 
-- Add end-to-end tests for the web recommendation flow.
 - Add structured observability for upstream API latency and failures.
 - Add optional provider abstraction for richer place imagery.
-- Add deployment configuration and environment documentation.
-- Add accessibility and responsive screenshot checks to CI.
+- Add accessibility audits and visual regression screenshots to CI.
+- Add account-backed saved scouts if the product moves beyond local sessions.

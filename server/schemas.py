@@ -8,7 +8,7 @@ from server.services.scorer rather than duplicated.
 from __future__ import annotations
 
 from datetime import date as date_type, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -108,6 +108,10 @@ class RecommendationItem(BaseModel):
     best_window: TimeWindowSchema
     light_phase: LightPhase
     score: int = Field(ge=0, le=100)
+    score_breakdown: ScoreBreakdownSchema
+    confidence: Literal["high", "medium", "low"]
+    reason_tags: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
     conditions_summary: str
     advice: str
     permit_required: bool

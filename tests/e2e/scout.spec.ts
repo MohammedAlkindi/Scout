@@ -1,0 +1,110 @@
+import { expect, test } from "@playwright/test";
+
+const recommendationFixture = {
+  latitude: 23.5791,
+  longitude: 58.4026,
+  intent: "romantic coastal portraits",
+  shot_type: "portrait",
+  generated_at: "2026-07-05T12:00:00Z",
+  recommendations: [
+    {
+      rank: 1,
+      location_name: "Azaiba Beach Park",
+      latitude: 23.6019,
+      longitude: 58.3912,
+      distance_miles: 3.7,
+      terrain_type: "urban park",
+      best_window: {
+        start_utc: "2026-07-05T14:25:00Z",
+        end_utc: "2026-07-05T14:58:00Z",
+      },
+      light_phase: "golden_hour",
+      score: 96,
+      score_breakdown: {
+        light: 100,
+        weather: 92,
+        crowd: 100,
+        access: 88,
+      },
+      confidence: "medium",
+      reason_tags: ["Golden-hour timing", "Low wind", "Close to origin", "No permit flag"],
+      caveats: ["Crowd and access signals are inferred from public map tags; verify locally."],
+      conditions_summary: "Soft coastal light, 6 mph wind, and clear visibility.",
+      advice: "Azaiba Beach Park: falls within golden hour; soft weather suits portrait work.",
+      permit_required: false,
+      permit_notes: null,
+      image_url: null,
+      image_attribution: null,
+    },
+    {
+      rank: 2,
+      location_name: "Qurum Natural Park",
+      latitude: 23.6146,
+      longitude: 58.4892,
+      distance_miles: 5.9,
+      terrain_type: "urban park",
+      best_window: {
+        start_utc: "2026-07-05T14:25:00Z",
+        end_utc: "2026-07-05T14:58:00Z",
+      },
+      light_phase: "golden_hour",
+      score: 89,
+      score_breakdown: {
+        light: 100,
+        weather: 86,
+        crowd: 60,
+        access: 88,
+      },
+      confidence: "medium",
+      reason_tags: ["Golden-hour timing", "Clear visibility", "Low access friction"],
+      caveats: ["Crowd and access signals are inferred from public map tags; verify locally."],
+      conditions_summary: "Warm light, accessible terrain, and moderate crowd risk.",
+      advice: "Qurum Natural Park: a strong backup if the coast is busy.",
+      permit_required: false,
+      permit_notes: null,
+      image_url: null,
+      image_attribution: null,
+    },
+  ],
+};
+
+test("does not create duplicate untouched sessions from repeated New Scout clicks", async ({ page }) => {
+  await page.goto("/");
+
+  const sessionRows = page.locator(".session-button");
+  const newScoutButton = page.locator("#new-session");
+  await expect(sessionRows).toHaveCount(2);
+
+  await newScoutButton.click();
+  await newScoutButton.click();
+  await newScoutButton.click();
+
+  await expect(sessionRows).toHaveCount(2);
+  await expect(page.getByText("Location pending / No intent yet")).toBeVisible();
+});
+
+test("sets a manual location and renders map-first recommendations", async ({ page }) => {
+  await page.route("**/api/recommendation", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(recommendationFixture),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByPlaceholder("37.7749").fill("23.5791");
+  await page.getByPlaceholder("-122.4194").fill("58.4026");
+  await page.getByRole("button", { name: "Use coordinates" }).click();
+
+  await expect(page.getByRole("heading", { name: "Plan the shot before you leave." })).toBeVisible();
+  await page.getByPlaceholder("Describe what you want to shoot or do.").fill("romantic coastal portraits");
+  await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Recommended scouting route" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Azaiba Beach Park, rank 1" })).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByRole("heading", { name: "Azaiba Beach Park" })).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByText("Golden-hour timing")).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByText("What to verify")).toBeVisible();
+});

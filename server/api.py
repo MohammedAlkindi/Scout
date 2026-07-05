@@ -11,6 +11,7 @@ translated to a generic message so they never reach the client.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date as date_type, datetime
 from pathlib import Path
 from typing import Optional
@@ -155,7 +156,8 @@ async def recommendation_route(body: RecommendationRequest) -> RecommendationRes
     )
 
 
-_PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public"
+_PUBLIC_DIR = Path(os.environ.get("SCOUT_PUBLIC_DIR", Path(__file__).resolve().parent.parent / "public"))
 
 # Mounted last and at "/" so the /api/* routes above always take precedence.
-app.mount("/", StaticFiles(directory=_PUBLIC_DIR, html=True), name="public")
+if _PUBLIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=_PUBLIC_DIR, html=True), name="public")

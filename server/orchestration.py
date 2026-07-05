@@ -331,6 +331,59 @@ def _conditions_summary(weather: WeatherSnapshot) -> str:
     )
 
 
+def _recommendation_confidence(candidate: LocationCandidate, weather: WeatherSnapshot, result: ScoreResult) -> str:
+    has_access_detail = "unknown" not in candidate.accessibility_notes.lower()
+    weather_is_stable = weather.precipitation_probability_pct <= 25 and weather.wind_speed_mph <= 15
+    if result.score >= 85 and has_access_detail and weather_is_stable and not candidate.permit_required:
+        return "high"
+    if result.score >= 60 and weather.precipitation_probability_pct <= 45:
+        return "medium"
+    return "low"
+
+
+def _reason_tags(
+    candidate: LocationCandidate,
+    light: WindowLightContext,
+    weather: WeatherSnapshot,
+    result: ScoreResult,
+) -> list[str]:
+    tags: list[str] = []
+    if light.phase == LightPhase.GOLDEN_HOUR:
+        tags.append("Golden-hour timing")
+    elif light.phase == LightPhase.BLUE_HOUR:
+        tags.append("Blue-hour timing")
+    if weather.visibility_miles >= 8:
+        tags.append("Clear visibility")
+    if weather.precipitation_probability_pct <= 20:
+        tags.append("Low rain risk")
+    if weather.wind_speed_mph <= 10:
+        tags.append("Low wind")
+    if candidate.distance_miles <= 5:
+        tags.append("Close to origin")
+    if candidate.crowd_level == CrowdLevel.LOW:
+        tags.append("Lower crowd signal")
+    if not candidate.permit_required:
+        tags.append("No permit flag")
+    if result.breakdown.access >= 80:
+        tags.append("Low access friction")
+    return tags[:6]
+
+
+def _recommendation_caveats(candidate: LocationCandidate, weather: WeatherSnapshot) -> list[str]:
+    caveats: list[str] = ["Crowd and access signals are inferred from public map tags; verify locally."]
+    if "unknown" in candidate.accessibility_notes.lower():
+        caveats.append("OpenStreetMap has limited accessibility detail for this place.")
+    if candidate.image_url is None:
+        caveats.append("No verified place photo was found in OSM or Wikimedia metadata.")
+    if candidate.permit_required:
+        caveats.append(candidate.permit_notes or "Permit or fee requirements may apply.")
+    if weather.precipitation_probability_pct > 30:
+        caveats.append("Rain risk is material for this window.")
+    if weather.wind_speed_mph > 18:
+        caveats.append("Wind may affect tripods, long lenses, or exposed viewpoints.")
+    return caveats[:4]
+
+
 @dataclass
 class _RankedLocation:
     candidate: LocationCandidate
@@ -400,6 +453,15 @@ async def build_recommendation(
             best_window=TimeWindowSchema(start_utc=item.window.start, end_utc=item.window.end),
             light_phase=item.light.phase,
             score=item.result.score,
+            score_breakdown=ScoreBreakdownSchema(
+                light=item.result.breakdown.light,
+                weather=item.result.breakdown.weather,
+                crowd=item.result.breakdown.crowd,
+                access=item.result.breakdown.access,
+            ),
+            confidence=_recommendation_confidence(item.candidate, item.weather, item.result),
+            reason_tags=_reason_tags(item.candidate, item.light, item.weather, item.result),
+            caveats=_recommendation_caveats(item.candidate, item.weather),
             conditions_summary=_conditions_summary(item.weather),
             advice=item.result.explanation,
             permit_required=item.candidate.permit_required,

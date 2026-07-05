@@ -85,6 +85,10 @@ function sessionHasLocation(session: Session): boolean {
   return session.location.label !== LOCATION_PENDING_LABEL;
 }
 
+function isUntouchedDraft(session: Session): boolean {
+  return !sessionHasLocation(session) && session.intent.trim() === "" && session.results === null;
+}
+
 function defaultSessionName(location: SessionLocation, intent: string): string {
   if (intent.trim()) {
     return intent.trim().slice(0, 42);
@@ -345,6 +349,15 @@ function main(): void {
   };
 
   elements.newSession.addEventListener("click", () => {
+    const existingDraft = state.sessions.find(isUntouchedDraft);
+    if (existingDraft !== undefined) {
+      state.activeSessionId = existingDraft.id;
+      setActiveNav(elements, state, "sessions");
+      elements.sidebar.classList.remove("sidebar--open");
+      renderApp();
+      return;
+    }
+
     const session = createSession();
     state.sessions = [session, ...state.sessions];
     state.activeSessionId = session.id;

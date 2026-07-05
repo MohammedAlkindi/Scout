@@ -5,10 +5,13 @@
   "description": "Location-aware photography and outdoor activity recommendations, grounded in live conditions.",
   "scripts": {
     "build": "tsc",
+    "ci": "npm run typecheck && npm run build && npm run test:e2e",
+    "test:e2e": "playwright test",
     "watch": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "typescript": "^5.9.0"
   }
 }

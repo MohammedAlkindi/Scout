@@ -20,6 +20,15 @@ export interface TimeWindow {
   end_utc: IsoDateTimeString;
 }
 
+export interface ScoreBreakdown {
+  light: number;
+  weather: number;
+  crowd: number;
+  access: number;
+}
+
+export type RecommendationConfidence = "high" | "medium" | "low";
+
 export interface RecommendationItem {
   rank: number;
   location_name: string;
@@ -30,6 +39,10 @@ export interface RecommendationItem {
   best_window: TimeWindow;
   light_phase: LightPhase;
   score: number;
+  score_breakdown: ScoreBreakdown;
+  confidence: RecommendationConfidence;
+  reason_tags: string[];
+  caveats: string[];
   conditions_summary: string;
   advice: string;
   permit_required: boolean;

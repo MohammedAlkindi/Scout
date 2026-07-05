@@ -1,5 +1,5 @@
 import { formatLightPhase } from "../format.js";
-import type { RecommendationItem, RecommendationResponse, Settings } from "../types.js";
+import type { RecommendationItem, RecommendationResponse, ScoreBreakdown, Settings } from "../types.js";
 
 const timeFormatters: Record<Settings["timeFormat"], Intl.DateTimeFormat> = {
   "12h": new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", hour12: true }),
@@ -26,6 +26,51 @@ function scoreClass(score: number): string {
     return "result-card__score result-card__score--mid";
   }
   return "result-card__score result-card__score--low";
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isScoreBreakdown(value: unknown): value is ScoreBreakdown {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    isNumber(record.light) &&
+    isNumber(record.weather) &&
+    isNumber(record.crowd) &&
+    isNumber(record.access)
+  );
+}
+
+function safeScoreBreakdown(item: RecommendationItem): ScoreBreakdown {
+  const value = item.score_breakdown as unknown;
+  if (isScoreBreakdown(value)) {
+    return value;
+  }
+  return {
+    light: item.score,
+    weather: item.score,
+    crowd: item.score,
+    access: item.score,
+  };
+}
+
+function safeStringList(value: unknown): string[] {
+  return isStringArray(value) ? value : [];
+}
+
+function confidenceLabel(item: RecommendationItem): string {
+  if (item.confidence === "high" || item.confidence === "medium" || item.confidence === "low") {
+    return item.confidence;
+  }
+  return "medium";
 }
 
 function escapeSvgText(value: string): string {
@@ -96,6 +141,48 @@ function buildPlaceImage(item: RecommendationItem): HTMLImageElement {
   return image;
 }
 
+interface MapBounds {
+  west: number;
+  east: number;
+  south: number;
+  north: number;
+}
+
+function buildBounds(response: RecommendationResponse): MapBounds {
+  const latitudes = [response.latitude, ...response.recommendations.map((item) => item.latitude)];
+  const longitudes = [response.longitude, ...response.recommendations.map((item) => item.longitude)];
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+  const latPadding = Math.max(0.012, (maxLat - minLat) * 0.28);
+  const lngPadding = Math.max(0.012, (maxLng - minLng) * 0.28);
+  return {
+    west: minLng - lngPadding,
+    east: maxLng + lngPadding,
+    south: minLat - latPadding,
+    north: maxLat + latPadding,
+  };
+}
+
+function clampPercent(value: number): number {
+  return Math.max(4, Math.min(96, value));
+}
+
+function mapPointStyle(item: RecommendationItem, bounds: MapBounds): { left: string; top: string } {
+  const lngSpan = bounds.east - bounds.west || 1;
+  const latSpan = bounds.north - bounds.south || 1;
+  return {
+    left: `${clampPercent(((item.longitude - bounds.west) / lngSpan) * 100)}%`,
+    top: `${clampPercent(((bounds.north - item.latitude) / latSpan) * 100)}%`,
+  };
+}
+
+function buildOverviewMapUrl(bounds: MapBounds): string {
+  const bbox = `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik`;
+}
+
 function buildMapUrl(item: RecommendationItem): string {
   const padding = 0.012;
   const west = item.longitude - padding;
@@ -106,6 +193,82 @@ function buildMapUrl(item: RecommendationItem): string {
   return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(
     `${item.latitude},${item.longitude}`,
   )}`;
+}
+
+function buildOverviewMap(response: RecommendationResponse, settings: Settings): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "results-map";
+
+  const header = document.createElement("div");
+  header.className = "results-map__header";
+  const text = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "label";
+  eyebrow.textContent = "Map view";
+  const title = document.createElement("h1");
+  title.textContent = "Recommended scouting route";
+  const body = document.createElement("p");
+  body.textContent = "Ranked pins show where Scout would go first, with cards below for timing and condition details.";
+  text.append(eyebrow, title, body);
+
+  const openMap = document.createElement("a");
+  openMap.className = "button";
+  openMap.href = `https://www.openstreetmap.org/?mlat=${response.latitude}&mlon=${response.longitude}#map=13/${response.latitude}/${response.longitude}`;
+  openMap.target = "_blank";
+  openMap.rel = "noreferrer";
+  openMap.textContent = "Open map";
+  header.append(text, openMap);
+
+  const bodyGrid = document.createElement("div");
+  bodyGrid.className = "results-map__body";
+  const bounds = buildBounds(response);
+
+  const map = document.createElement("div");
+  map.className = "overview-map";
+  const frame = document.createElement("iframe");
+  frame.title = "Scout recommendation map";
+  frame.loading = "lazy";
+  frame.referrerPolicy = "no-referrer-when-downgrade";
+  frame.src = buildOverviewMapUrl(bounds);
+  map.appendChild(frame);
+
+  for (const item of response.recommendations) {
+    const pin = document.createElement("a");
+    pin.className = "overview-map__pin";
+    pin.href = `#recommendation-${item.rank}`;
+    pin.textContent = String(item.rank);
+    pin.setAttribute("aria-label", `${item.location_name}, rank ${item.rank}`);
+    const position = mapPointStyle(item, bounds);
+    pin.style.left = position.left;
+    pin.style.top = position.top;
+    map.appendChild(pin);
+  }
+
+  const list = document.createElement("ol");
+  list.className = "route-list";
+  for (const item of response.recommendations) {
+    const row = document.createElement("li");
+    const titleRow = document.createElement("div");
+    titleRow.className = "route-list__top";
+    const name = document.createElement("strong");
+    name.textContent = item.location_name;
+    const score = document.createElement("span");
+    score.className = scoreClass(item.score);
+    score.textContent = `${item.score}`;
+    titleRow.append(name, score);
+    const meta = document.createElement("p");
+    meta.textContent = `${formatDistance(item.distance_miles, settings)} / ${formatTimeWindow(
+      item.best_window.start_utc,
+      item.best_window.end_utc,
+      settings,
+    )}`;
+    row.append(titleRow, meta);
+    list.appendChild(row);
+  }
+
+  bodyGrid.append(map, list);
+  section.append(header, bodyGrid);
+  return section;
 }
 
 function buildMedia(item: RecommendationItem): HTMLElement {
@@ -162,9 +325,74 @@ function tile(label: string, value: string): HTMLElement {
   return element;
 }
 
+function buildReasonChips(item: RecommendationItem): HTMLElement | null {
+  const tags = safeStringList(item.reason_tags as unknown);
+  if (tags.length === 0) {
+    return null;
+  }
+  const list = document.createElement("ul");
+  list.className = "reason-chips";
+  for (const tag of tags) {
+    const chip = document.createElement("li");
+    chip.textContent = tag;
+    list.appendChild(chip);
+  }
+  return list;
+}
+
+function buildBreakdown(item: RecommendationItem): HTMLElement {
+  const breakdown = safeScoreBreakdown(item);
+  const rows: ReadonlyArray<readonly [string, number]> = [
+    ["Light", breakdown.light],
+    ["Weather", breakdown.weather],
+    ["Crowd", breakdown.crowd],
+    ["Access", breakdown.access],
+  ];
+  const list = document.createElement("div");
+  list.className = "score-breakdown";
+  for (const [label, value] of rows) {
+    const row = document.createElement("div");
+    row.className = "score-breakdown__row";
+    const rowLabel = document.createElement("span");
+    rowLabel.textContent = label;
+    const track = document.createElement("span");
+    track.className = "score-breakdown__track";
+    const fill = document.createElement("span");
+    fill.className = "score-breakdown__fill";
+    fill.style.width = `${Math.max(0, Math.min(100, value))}%`;
+    const score = document.createElement("span");
+    score.className = "data";
+    score.textContent = value.toFixed(0);
+    track.appendChild(fill);
+    row.append(rowLabel, track, score);
+    list.appendChild(row);
+  }
+  return list;
+}
+
+function buildCaveats(item: RecommendationItem): HTMLElement | null {
+  const caveats = safeStringList(item.caveats as unknown);
+  if (caveats.length === 0) {
+    return null;
+  }
+  const details = document.createElement("details");
+  details.className = "caveats";
+  const summary = document.createElement("summary");
+  summary.textContent = "What to verify";
+  const list = document.createElement("ul");
+  for (const caveat of caveats) {
+    const row = document.createElement("li");
+    row.textContent = caveat;
+    list.appendChild(row);
+  }
+  details.append(summary, list);
+  return details;
+}
+
 function buildCard(item: RecommendationItem, index: number, settings: Settings): HTMLElement {
   const card = document.createElement("article");
   card.className = `result-card result-card--${item.light_phase}${index === 0 ? " result-card--primary" : ""}`;
+  card.id = `recommendation-${item.rank}`;
   card.style.setProperty("--stagger-index", String(index));
 
   const top = document.createElement("div");
@@ -176,7 +404,9 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
   name.textContent = item.location_name;
   const meta = document.createElement("p");
   meta.className = "result-card__meta";
-  meta.textContent = `${item.terrain_type} / ${formatLightPhase(item.light_phase)}`;
+  meta.textContent = `${item.terrain_type} / ${formatLightPhase(item.light_phase)} / ${confidenceLabel(
+    item,
+  )} confidence`;
   titleBlock.append(name, meta);
 
   const score = document.createElement("div");
@@ -195,6 +425,8 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
     tile("Score", `${item.score}/100`),
   );
 
+  const reasonChips = buildReasonChips(item);
+  const breakdown = buildBreakdown(item);
   const summary = document.createElement("p");
   summary.className = "result-card__summary";
   summary.textContent = item.conditions_summary;
@@ -202,7 +434,11 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
   const advice = document.createElement("p");
   advice.textContent = item.advice;
 
-  card.append(top, media, grid, summary, advice);
+  card.append(top, media, grid);
+  if (reasonChips !== null) {
+    card.appendChild(reasonChips);
+  }
+  card.append(breakdown, summary, advice);
 
   if (item.permit_required) {
     const permit = document.createElement("p");
@@ -211,10 +447,29 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
     card.appendChild(permit);
   }
 
+  const caveats = buildCaveats(item);
+  if (caveats !== null) {
+    card.appendChild(caveats);
+  }
+
   return card;
 }
 
 export function renderResults(root: HTMLElement, response: RecommendationResponse, settings: Settings): void {
+  if (response.recommendations.length === 0) {
+    const empty = document.createElement("section");
+    empty.className = "workspace-panel";
+    const title = document.createElement("h1");
+    title.textContent = "No recommendations found";
+    const body = document.createElement("p");
+    body.textContent = "Try a wider radius or a less specific scouting intent.";
+    empty.append(title, body);
+    root.appendChild(empty);
+    return;
+  }
+
+  root.appendChild(buildOverviewMap(response, settings));
+
   const top = response.recommendations[0];
   if (top !== undefined) {
     const summary = document.createElement("section");
