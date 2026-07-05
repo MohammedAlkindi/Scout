@@ -9,7 +9,7 @@ OpenStreetMap candidates against sunlight phase, weather, distance, terrain,
 and access signals. The same recommendation engine is exposed through both a
 FastAPI web app and an MCP server.
 
-Live demo: [https://scout-six-beta.vercel.app](https://scout-six-beta.vercel.app)
+Live demo: [https://scoutphotography.vercel.app](https://scoutphotography.vercel.app)
 
 ## What Scout Does
 

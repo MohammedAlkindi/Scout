@@ -1,0 +1,318 @@
+import { fetchRecommendation } from "./api.js";
+import { applySettings, initSettingsPanel } from "./settings.js";
+import { createSession, createDemoSession, deleteSession, duplicateSession, loadSessions, loadSettings, saveSettings, saveSessions, upsertSession, } from "./storage.js";
+import { renderIntentInput } from "./views/intentInput.js";
+import { renderLocationGrant } from "./views/locationGrant.js";
+import { renderResults } from "./views/results.js";
+const LOCATION_PENDING_LABEL = "Location pending";
+function requireElement(id, constructor) {
+    const element = document.getElementById(id);
+    if (!(element instanceof constructor)) {
+        throw new Error(`Missing #${id}`);
+    }
+    return element;
+}
+function getElements() {
+    return {
+        sidebar: requireElement("sidebar", HTMLElement),
+        sidebarToggle: requireElement("sidebar-toggle", HTMLButtonElement),
+        sessionList: requireElement("session-list", HTMLElement),
+        newSession: requireElement("new-session", HTMLButtonElement),
+        navSessions: requireElement("nav-sessions", HTMLButtonElement),
+        navConditions: requireElement("nav-conditions", HTMLButtonElement),
+        navPreferences: requireElement("nav-preferences", HTMLButtonElement),
+        mainContent: requireElement("main-content", HTMLElement),
+        activeTitle: requireElement("active-session-title", HTMLElement),
+        settingsPanel: requireElement("settings-panel", HTMLElement),
+        settingsOverlay: requireElement("settings-overlay", HTMLElement),
+        settingsOpen: requireElement("settings-open", HTMLButtonElement),
+    };
+}
+function formatSessionTime(iso) {
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+}
+function activeSession(state) {
+    const session = state.sessions.find((candidate) => candidate.id === state.activeSessionId);
+    if (session !== undefined) {
+        return session;
+    }
+    return state.sessions[0] ?? createSession();
+}
+function sessionHasLocation(session) {
+    return session.location.label !== LOCATION_PENDING_LABEL;
+}
+function isUntouchedDraft(session) {
+    return !sessionHasLocation(session) && session.intent.trim() === "" && session.results === null;
+}
+function defaultSessionName(location, intent) {
+    if (intent.trim()) {
+        return intent.trim().slice(0, 42);
+    }
+    return location.label;
+}
+function updateSession(state, session) {
+    state.sessions = upsertSession(session);
+    state.activeSessionId = session.id;
+}
+function setActiveNav(elements, state, activeNav) {
+    state.activeNav = activeNav;
+    elements.navSessions.classList.toggle("sidebar__nav-item--active", activeNav === "sessions");
+    elements.navConditions.classList.toggle("sidebar__nav-item--active", activeNav === "conditions");
+    elements.navPreferences.classList.toggle("sidebar__nav-item--active", activeNav === "preferences");
+}
+function createMenuButton(label, onClick) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.textContent = label;
+    item.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onClick();
+    });
+    return item;
+}
+function renderSidebar(elements, state, renderApp) {
+    elements.sessionList.textContent = "";
+    for (const session of state.sessions) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = `session-button${session.id === state.activeSessionId ? " session-button--active" : ""}`;
+        row.addEventListener("click", () => {
+            state.activeSessionId = session.id;
+            setActiveNav(elements, state, "sessions");
+            elements.sidebar.classList.remove("sidebar--open");
+            renderApp();
+        });
+        const text = document.createElement("span");
+        text.className = "session-button__text";
+        const title = document.createElement("span");
+        title.className = "session-button__title";
+        title.textContent = session.name;
+        const meta = document.createElement("span");
+        meta.className = "session-button__meta";
+        const intent = session.intent.trim() || "No intent yet";
+        meta.textContent = `${session.location.label} / ${intent} / ${formatSessionTime(session.createdAt)}`;
+        text.append(title, meta);
+        const menu = document.createElement("span");
+        menu.className = "session-menu";
+        const trigger = document.createElement("span");
+        trigger.className = "icon-button";
+        trigger.textContent = "...";
+        trigger.setAttribute("role", "button");
+        trigger.setAttribute("tabindex", "0");
+        const popover = document.createElement("span");
+        popover.className = "menu-popover";
+        popover.hidden = true;
+        trigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+            popover.hidden = !popover.hidden;
+        });
+        popover.append(createMenuButton("Rename", () => {
+            const nextName = window.prompt("Rename scout session", session.name);
+            if (nextName !== null && nextName.trim()) {
+                updateSession(state, { ...session, name: nextName.trim() });
+                renderApp();
+            }
+        }), createMenuButton("Delete", () => {
+            state.sessions = deleteSession(session.id);
+            if (state.sessions.length === 0) {
+                const fresh = createSession();
+                state.sessions = [fresh];
+                saveSessions(state.sessions);
+            }
+            state.activeSessionId = state.sessions[0]?.id ?? createSession().id;
+            renderApp();
+        }), createMenuButton("Duplicate", () => {
+            const duplicate = duplicateSession(session);
+            state.sessions = [duplicate, ...state.sessions];
+            saveSessions(state.sessions);
+            state.activeSessionId = duplicate.id;
+            renderApp();
+        }));
+        menu.append(trigger, popover);
+        row.append(text, menu);
+        elements.sessionList.appendChild(row);
+    }
+}
+function renderActiveSession(elements, state, renderApp) {
+    const session = activeSession(state);
+    elements.activeTitle.textContent =
+        state.activeNav === "conditions" ? "Conditions" : state.activeNav === "preferences" ? "Preferences" : session.name;
+    elements.mainContent.textContent = "";
+    const wrapper = document.createElement("div");
+    wrapper.className = "session-main";
+    elements.mainContent.appendChild(wrapper);
+    if (state.activeNav === "conditions") {
+        renderConditionsView(wrapper, session);
+        return;
+    }
+    if (state.activeNav === "preferences") {
+        renderPreferencesView(wrapper, state.settings);
+        return;
+    }
+    if (!sessionHasLocation(session)) {
+        renderLocationGrant(wrapper, {
+            onGranted: (location) => {
+                const nextLocation = {
+                    lat: location.latitude,
+                    lng: location.longitude,
+                    label: `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`,
+                };
+                updateSession(state, { ...session, location: nextLocation, name: defaultSessionName(nextLocation, session.intent) });
+                renderApp();
+            },
+        });
+        return;
+    }
+    renderIntentInput(wrapper, session, state.settings, {
+        onSubmit: async (intent, shotType) => {
+            const request = {
+                latitude: session.location.lat,
+                longitude: session.location.lng,
+                intent,
+                radius_miles: state.settings.radiusMiles,
+            };
+            if (shotType !== undefined) {
+                request.shot_type = shotType;
+            }
+            const response = await fetchRecommendation(request);
+            const nextSession = {
+                ...session,
+                intent,
+                results: response,
+                name: defaultSessionName(session.location, intent),
+            };
+            updateSession(state, nextSession);
+            renderApp();
+        },
+    });
+    if (session.results !== null) {
+        renderResults(wrapper, session.results, state.settings);
+    }
+}
+function renderConditionsView(root, session) {
+    const panel = document.createElement("section");
+    panel.className = "workspace-panel";
+    const title = document.createElement("h1");
+    title.textContent = "Condition intelligence";
+    const body = document.createElement("p");
+    body.textContent =
+        session.results === null
+            ? "Run a scout to see weather, timing, and light-condition summaries for each recommended place."
+            : "Review the current condition signals Scout used to rank this session.";
+    panel.append(title, body);
+    if (session.results !== null) {
+        const grid = document.createElement("div");
+        grid.className = "insight-grid";
+        for (const item of session.results.recommendations) {
+            const card = document.createElement("article");
+            card.className = `insight-card insight-card--${item.light_phase}`;
+            const cardTitle = document.createElement("h2");
+            cardTitle.textContent = item.location_name;
+            const score = document.createElement("p");
+            score.className = "data";
+            score.textContent = `${item.score}/100`;
+            const summary = document.createElement("p");
+            summary.textContent = item.conditions_summary;
+            card.append(cardTitle, score, summary);
+            grid.appendChild(card);
+        }
+        panel.appendChild(grid);
+    }
+    root.appendChild(panel);
+}
+function renderPreferencesView(root, settings) {
+    const panel = document.createElement("section");
+    panel.className = "workspace-panel";
+    const title = document.createElement("h1");
+    title.textContent = "Preferences";
+    const body = document.createElement("p");
+    body.textContent = "Use the settings drawer from the bottom-left Scout profile to adjust defaults.";
+    const grid = document.createElement("div");
+    grid.className = "insight-grid";
+    const rows = [
+        ["Units", settings.units],
+        ["Radius", `${settings.radiusMiles} mi`],
+        ["Time", settings.timeFormat],
+        ["Theme", settings.theme],
+        ["Activities", settings.activityTypes.join(", ") || "none"],
+    ];
+    for (const [label, value] of rows) {
+        const card = document.createElement("article");
+        card.className = "insight-card";
+        const cardTitle = document.createElement("h2");
+        cardTitle.textContent = label;
+        const cardValue = document.createElement("p");
+        cardValue.className = "data";
+        cardValue.textContent = value;
+        card.append(cardTitle, cardValue);
+        grid.appendChild(card);
+    }
+    panel.append(title, body, grid);
+    root.appendChild(panel);
+}
+function main() {
+    const elements = getElements();
+    const sessions = loadSessions();
+    const firstSession = sessions[0] ?? createSession();
+    const initialSessions = sessions.length === 0 ? [firstSession, createDemoSession()] : sessions;
+    if (sessions.length === 0) {
+        saveSessions(initialSessions);
+    }
+    const state = {
+        sessions: initialSessions,
+        activeSessionId: firstSession.id,
+        settings: loadSettings(),
+        activeNav: "sessions",
+    };
+    const renderApp = () => {
+        setActiveNav(elements, state, state.activeNav);
+        renderSidebar(elements, state, renderApp);
+        renderActiveSession(elements, state, renderApp);
+    };
+    elements.newSession.addEventListener("click", () => {
+        const existingDraft = state.sessions.find(isUntouchedDraft);
+        if (existingDraft !== undefined) {
+            state.activeSessionId = existingDraft.id;
+            setActiveNav(elements, state, "sessions");
+            elements.sidebar.classList.remove("sidebar--open");
+            renderApp();
+            return;
+        }
+        const session = createSession();
+        state.sessions = [session, ...state.sessions];
+        state.activeSessionId = session.id;
+        setActiveNav(elements, state, "sessions");
+        saveSessions(state.sessions);
+        renderApp();
+    });
+    elements.navSessions.addEventListener("click", () => {
+        setActiveNav(elements, state, "sessions");
+        renderApp();
+    });
+    elements.navConditions.addEventListener("click", () => {
+        setActiveNav(elements, state, "conditions");
+        renderApp();
+    });
+    elements.navPreferences.addEventListener("click", () => {
+        setActiveNav(elements, state, "preferences");
+        elements.settingsOpen.click();
+        renderApp();
+    });
+    elements.sidebarToggle.addEventListener("click", () => {
+        elements.sidebar.classList.toggle("sidebar--open");
+    });
+    initSettingsPanel({
+        panel: elements.settingsPanel,
+        overlay: elements.settingsOverlay,
+        openButton: elements.settingsOpen,
+        settings: state.settings,
+        onChange: (settings) => {
+            state.settings = settings;
+            saveSettings(settings);
+            applySettings(settings);
+            renderApp();
+        },
+    });
+    renderApp();
+}
+main();

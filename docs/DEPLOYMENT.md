@@ -8,7 +8,7 @@ FastAPI backend.
 Production URL:
 
 ```text
-https://scout-six-beta.vercel.app
+https://scoutphotography.vercel.app
 ```
 
 ## Files
@@ -81,14 +81,14 @@ npx vercel deploy --prod --yes
 Verify after deploy:
 
 ```bash
-curl https://scout-six-beta.vercel.app/api/health
-curl https://scout-six-beta.vercel.app/index.html
+curl https://scoutphotography.vercel.app/api/health
+curl https://scoutphotography.vercel.app/index.html
 ```
 
 Check recent server errors:
 
 ```bash
-npx vercel logs scout-six-beta.vercel.app --since 10m --status-code 500 --limit 20 --expand
+npx vercel logs scoutphotography.vercel.app --since 10m --status-code 500 --limit 20 --expand
 ```
 
 ## Common Issues
@@ -106,4 +106,3 @@ runtime dependencies.
 
 Local app works but deployed app cannot load assets
 : Run `npm run build` and confirm `public/dist/` is generated before deploy.
-

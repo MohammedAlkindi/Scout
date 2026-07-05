@@ -12,7 +12,7 @@ http://127.0.0.1:8420
 Production base URL:
 
 ```text
-https://scout-six-beta.vercel.app
+https://scoutphotography.vercel.app
 ```
 
 ## Error Shape
@@ -191,4 +191,3 @@ high, medium, low
 - Crowd, permit, access, and media fields are inferred from public map tags.
 - Clients should treat caveats as part of the recommendation, not secondary
   metadata.
-
