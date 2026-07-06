@@ -36,7 +36,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Python tests
-        run: python -m pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
+        run: python -m pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py tests/test_observability.py -q
 
       - name: Type-check frontend
         run: npm run typecheck
@@ -46,3 +46,11 @@ jobs:
 
       - name: Run browser smoke test
         run: npm run test:e2e
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results
+          if-no-files-found: ignore

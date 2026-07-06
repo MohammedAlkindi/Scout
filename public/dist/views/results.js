@@ -1,4 +1,5 @@
 import { formatLightPhase } from "../format.js";
+import { buildShareUrl } from "../share.js";
 const timeFormatters = {
     "12h": new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", hour12: true }),
     "24h": new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }),
@@ -478,6 +479,43 @@ function buildSourceNotice(response) {
     notice.append(label, body);
     return notice;
 }
+function buildShareActions(response) {
+    const section = document.createElement("section");
+    section.className = "share-actions";
+    const text = document.createElement("div");
+    const label = document.createElement("p");
+    label.className = "label";
+    label.textContent = "Share";
+    const body = document.createElement("p");
+    body.textContent = "Create a read-only link for this scout result.";
+    text.append(label, body);
+    const actions = document.createElement("div");
+    actions.className = "share-actions__controls";
+    const status = document.createElement("span");
+    status.className = "report-actions__status";
+    status.setAttribute("role", "status");
+    const shareUrl = buildShareUrl(response);
+    const copy = document.createElement("button");
+    copy.className = "button button--primary";
+    copy.type = "button";
+    copy.textContent = "Copy share link";
+    copy.addEventListener("click", () => {
+        void copyText(shareUrl)
+            .then((copied) => {
+            status.textContent = copied ? "Share link copied" : "Copy unavailable. Open the link instead.";
+        })
+            .catch(() => {
+            status.textContent = "Copy unavailable. Open the link instead.";
+        });
+    });
+    const open = document.createElement("a");
+    open.className = "button";
+    open.href = shareUrl;
+    open.textContent = "Open share link";
+    actions.append(copy, open, status);
+    section.append(text, actions);
+    return section;
+}
 function buildCard(item, index, response, settings) {
     const card = document.createElement("article");
     card.className = `result-card result-card--${item.light_phase}${index === 0 ? " result-card--primary" : ""}`;
@@ -544,6 +582,7 @@ export function renderResults(root, response, settings) {
     if (sourceNotice !== null) {
         root.appendChild(sourceNotice);
     }
+    root.appendChild(buildShareActions(response));
     const top = response.recommendations[0];
     if (top !== undefined) {
         const summary = document.createElement("section");

@@ -43,6 +43,7 @@ export function applySettings(settings) {
 }
 export function initSettingsPanel(options) {
     let current = options.settings;
+    let returnFocus = null;
     function update(next) {
         current = next;
         applySettings(current);
@@ -51,13 +52,17 @@ export function initSettingsPanel(options) {
     }
     function render(settings) {
         options.panel.textContent = "";
+        options.panel.setAttribute("role", "dialog");
+        options.panel.setAttribute("aria-modal", "true");
         const header = document.createElement("div");
         header.className = "settings-panel__header";
         const title = document.createElement("h1");
+        title.id = "settings-title";
         title.textContent = "Settings";
+        options.panel.setAttribute("aria-labelledby", title.id);
         const close = button("x", "icon-button");
         close.setAttribute("aria-label", "Close settings");
-        close.addEventListener("click", () => setOpen(options.panel, options.overlay, false));
+        close.addEventListener("click", () => closePanel());
         header.append(title, close);
         const units = section("Units");
         units.appendChild(renderSegmented(["metric", "imperial"], settings.units, "segmented", (unitsValue) => {
@@ -68,6 +73,7 @@ export function initSettingsPanel(options) {
         radiusRow.className = "range-row";
         const range = document.createElement("input");
         range.type = "range";
+        range.setAttribute("aria-label", "Default search radius in miles");
         range.min = "1";
         range.max = "50";
         range.value = String(settings.radiusMiles);
@@ -106,11 +112,22 @@ export function initSettingsPanel(options) {
         }));
         options.panel.append(header, units, radius, activities, time, theme);
     }
-    options.openButton.addEventListener("click", () => setOpen(options.panel, options.overlay, true));
-    options.overlay.addEventListener("click", () => setOpen(options.panel, options.overlay, false));
+    function openPanel() {
+        returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : options.openButton;
+        setOpen(options.panel, options.overlay, true);
+        window.setTimeout(() => {
+            options.panel.querySelector("[aria-label='Close settings']")?.focus();
+        }, 0);
+    }
+    function closePanel() {
+        setOpen(options.panel, options.overlay, false);
+        returnFocus?.focus();
+    }
+    options.openButton.addEventListener("click", openPanel);
+    options.overlay.addEventListener("click", closePanel);
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
-            setOpen(options.panel, options.overlay, false);
+            closePanel();
         }
     });
     applySettings(current);

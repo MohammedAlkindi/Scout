@@ -73,6 +73,11 @@ permit, crowd, and image metadata signals.
 : Pure scoring model. This is intentionally network-free so the ranking logic
 can be tested without mocks.
 
+`server/observability.py`
+: Process-local structured telemetry. It records API outcomes, upstream
+latency, Scout errors, and recommendation summaries using coarse coordinate
+buckets rather than raw user intent or precise location history.
+
 ## Frontend Boundaries
 
 `src/main.ts`
@@ -84,6 +89,10 @@ flow.
 
 `src/storage.ts`
 : Local browser persistence for sessions and preferences.
+
+`src/share.ts`
+: Read-only share-link encoding/decoding for recommendation responses. Shared
+links hydrate into local sessions without a database.
 
 `src/settings.ts`
 : Preferences panel behavior and theme handling.
@@ -114,6 +123,9 @@ flow.
 8. The response includes score breakdowns, confidence, reason tags, caveats,
    map coordinates, and image metadata when available.
 9. The frontend renders a map-first overview and recommendation cards.
+10. Users can copy a read-only share link for the result; opening that URL
+    creates a local shared session and removes the share payload from the
+    address bar to avoid duplicate imports on reload.
 
 If the request matches the bundled Muscat sunset demo and a live provider fails,
 orchestration returns a `demo_mode` response with static Muscat place candidates
@@ -167,9 +179,12 @@ Scout-specific errors. The HTTP layer maps those to small JSON responses:
 Unexpected exceptions are logged server-side and returned as a generic user-safe
 message.
 
-The recommendation route logs rounded coordinates, shot type, result count,
-demo-mode usage, and elapsed time. It does not log raw provider payloads or
-credentials.
+The API emits structured telemetry for HTTP requests, upstream calls, expected
+Scout errors, and recommendations. Recommendation telemetry stores shot type,
+result count, elapsed time, demo-mode usage, score, radius bucket, and coarse
+coordinate bucket. It does not log raw provider payloads, raw intent text,
+precise coordinates, or credentials. `GET /api/diagnostics` exposes the
+process-local counters for smoke checks.
 
 ## Extension Points
 
@@ -177,8 +192,8 @@ Good next places to extend the architecture:
 
 - Add a provider interface for paid place imagery while keeping OSM as the
   default.
-- Add observability around upstream latency, rate limits, empty searches, and
-  recommendation score distributions.
+- Export telemetry to a hosted sink when Scout needs multi-instance or
+  long-retention observability.
 - Add account-backed saved scouts behind a storage layer without changing the
   scoring model.
-- Add visual regression testing around the map-first result page.
+- Add snapshot-style visual regression testing around the map-first result page.

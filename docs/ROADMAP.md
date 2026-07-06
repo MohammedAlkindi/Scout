@@ -10,18 +10,17 @@ trust, polish, and repeatability.
 - Keep the bundled Muscat demo flow healthy as the guaranteed walkthrough path.
 - Treat structured recovery panels, trust badges, and report export as part of
   the public demo surface.
+- Keep read-only share links and diagnostics healthy as part of the product
+  surface.
 
 ## Next
 
 - Add provider abstraction for optional richer place imagery.
-- Add visual regression screenshots for the main result page.
+- Add snapshot-style visual regression screenshots for the main result page.
 - Expand E2E coverage for conditions and deeper preference workflows.
-- Add durable observability for upstream latency, rate limits, empty searches,
-  and error rates.
-- Add structured recommendation telemetry that does not collect sensitive user
-  location history by default.
-- Add a shareable read-only scout result URL.
-- Add stronger accessibility testing and keyboard navigation checks.
+- Export privacy-safe telemetry to a durable hosted sink.
+- Add a full accessibility audit and automated checks beyond the current
+  keyboard-focused regressions.
 
 ## Later
 

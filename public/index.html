@@ -33,7 +33,7 @@
         </nav>
         <label class="sidebar__search">
           <span>Search</span>
-          <input type="search" placeholder="Search scouts" />
+          <input id="session-search" type="search" placeholder="Search scouts" />
         </label>
         <div class="sidebar__section-label">Recent</div>
         <div class="sidebar__sessions" id="session-list"></div>
@@ -56,7 +56,7 @@
     </div>
 
     <div class="settings-overlay" id="settings-overlay"></div>
-    <aside class="settings-panel" id="settings-panel" aria-label="Settings" aria-hidden="true"></aside>
+    <aside class="settings-panel" id="settings-panel" aria-label="Settings" aria-hidden="true" role="dialog" aria-modal="true"></aside>
 
     <script type="module" src="dist/main.js"></script>
   </body>

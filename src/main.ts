@@ -1,4 +1,5 @@
 import { fetchRecommendation } from "./api.js";
+import { clearShareParamFromUrl, readSharedRecommendationFromUrl } from "./share.js";
 import { applySettings, initSettingsPanel } from "./settings.js";
 import {
   createSession,
@@ -27,6 +28,7 @@ interface AppElements {
   navSessions: HTMLButtonElement;
   navConditions: HTMLButtonElement;
   navPreferences: HTMLButtonElement;
+  sessionSearch: HTMLInputElement;
   mainContent: HTMLElement;
   activeTitle: HTMLElement;
   settingsPanel: HTMLElement;
@@ -41,6 +43,7 @@ interface AppState {
   activeSessionId: string;
   settings: Settings;
   activeNav: ActiveNav;
+  sessionQuery: string;
 }
 
 function requireElement<T extends HTMLElement>(id: string, constructor: { new (): T }): T {
@@ -60,6 +63,7 @@ function getElements(): AppElements {
     navSessions: requireElement("nav-sessions", HTMLButtonElement),
     navConditions: requireElement("nav-conditions", HTMLButtonElement),
     navPreferences: requireElement("nav-preferences", HTMLButtonElement),
+    sessionSearch: requireElement("session-search", HTMLInputElement),
     mainContent: requireElement("main-content", HTMLElement),
     activeTitle: requireElement("active-session-title", HTMLElement),
     settingsPanel: requireElement("settings-panel", HTMLElement),
@@ -132,6 +136,17 @@ function setActiveNav(elements: AppElements, state: AppState, activeNav: ActiveN
   elements.navSessions.classList.toggle("sidebar__nav-item--active", activeNav === "sessions");
   elements.navConditions.classList.toggle("sidebar__nav-item--active", activeNav === "conditions");
   elements.navPreferences.classList.toggle("sidebar__nav-item--active", activeNav === "preferences");
+  for (const [button, isActive] of [
+    [elements.navSessions, activeNav === "sessions"],
+    [elements.navConditions, activeNav === "conditions"],
+    [elements.navPreferences, activeNav === "preferences"],
+  ] as const) {
+    if (isActive) {
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.removeAttribute("aria-current");
+    }
+  }
 }
 
 function createMenuButton(label: string, onClick: () => void): HTMLButtonElement {
@@ -147,17 +162,29 @@ function createMenuButton(label: string, onClick: () => void): HTMLButtonElement
 
 function renderSidebar(elements: AppElements, state: AppState, renderApp: () => void): void {
   elements.sessionList.textContent = "";
+  const query = state.sessionQuery.trim().toLowerCase();
+  const sessions = query
+    ? state.sessions.filter((session) =>
+        [session.name, session.location.label, session.intent].join(" ").toLowerCase().includes(query),
+      )
+    : state.sessions;
 
-  for (const session of state.sessions) {
-    const row = document.createElement("button");
-    row.type = "button";
+  for (const session of sessions) {
+    const row = document.createElement("div");
     row.className = `session-button${session.id === state.activeSessionId ? " session-button--active" : ""}`;
-    row.addEventListener("click", () => {
+    const activate = () => {
       state.activeSessionId = session.id;
       setActiveNav(elements, state, "sessions");
       elements.sidebar.classList.remove("sidebar--open");
       renderApp();
-    });
+    };
+    const selector = document.createElement("button");
+    selector.className = "session-button__select";
+    selector.type = "button";
+    selector.addEventListener("click", activate);
+    if (session.id === state.activeSessionId) {
+      selector.setAttribute("aria-current", "true");
+    }
 
     const text = document.createElement("span");
     text.className = "session-button__text";
@@ -172,11 +199,11 @@ function renderSidebar(elements: AppElements, state: AppState, renderApp: () => 
 
     const menu = document.createElement("span");
     menu.className = "session-menu";
-    const trigger = document.createElement("span");
+    const trigger = document.createElement("button");
     trigger.className = "icon-button";
+    trigger.type = "button";
     trigger.textContent = "...";
-    trigger.setAttribute("role", "button");
-    trigger.setAttribute("tabindex", "0");
+    trigger.setAttribute("aria-label", `Session actions for ${session.name}`);
     const popover = document.createElement("span");
     popover.className = "menu-popover";
     popover.hidden = true;
@@ -213,9 +240,17 @@ function renderSidebar(elements: AppElements, state: AppState, renderApp: () => 
       }),
     );
 
+    selector.appendChild(text);
     menu.append(trigger, popover);
-    row.append(text, menu);
+    row.append(selector, menu);
     elements.sessionList.appendChild(row);
+  }
+
+  if (sessions.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "session-empty";
+    empty.textContent = "No sessions match this search.";
+    elements.sessionList.appendChild(empty);
   }
 }
 
@@ -357,20 +392,43 @@ function renderPreferencesView(root: HTMLElement, settings: Settings): void {
   root.appendChild(panel);
 }
 
+function sharedSessionFromResponse(response: RecommendationResponse): Session {
+  const name = response.intent.trim() ? `Shared: ${response.intent.trim().slice(0, 36)}` : "Shared scout";
+  return {
+    id: crypto.randomUUID(),
+    createdAt: response.generated_at,
+    location: { lat: response.latitude, lng: response.longitude, label: "Shared location" },
+    intent: response.intent,
+    results: response,
+    name,
+  };
+}
+
 function main(): void {
   const elements = getElements();
+  const sharedResponse = readSharedRecommendationFromUrl();
   const sessions = loadSessions();
   const firstSession = sessions[0] ?? createSession();
-  const initialSessions = ensureDemoSession(sessions.length === 0 ? [firstSession] : sessions);
-  if (sessions.length === 0 || initialSessions.length !== sessions.length) {
+  const sessionsWithShare =
+    sharedResponse === null
+      ? sessions.length === 0
+        ? [firstSession]
+        : sessions
+      : [sharedSessionFromResponse(sharedResponse), ...sessions];
+  const initialSessions = ensureDemoSession(sessionsWithShare);
+  if (sharedResponse !== null || sessions.length === 0 || initialSessions.length !== sessions.length) {
     saveSessions(initialSessions);
+  }
+  if (sharedResponse !== null) {
+    clearShareParamFromUrl();
   }
 
   const state: AppState = {
     sessions: initialSessions,
-    activeSessionId: firstSession.id,
+    activeSessionId: sharedResponse === null ? firstSession.id : initialSessions[0]?.id ?? firstSession.id,
     settings: loadSettings(),
     activeNav: "sessions",
+    sessionQuery: "",
   };
 
   const renderApp = (): void => {
@@ -415,6 +473,11 @@ function main(): void {
 
   elements.sidebarToggle.addEventListener("click", () => {
     elements.sidebar.classList.toggle("sidebar--open");
+  });
+
+  elements.sessionSearch.addEventListener("input", () => {
+    state.sessionQuery = elements.sessionSearch.value;
+    renderSidebar(elements, state, renderApp);
   });
 
   initSettingsPanel({

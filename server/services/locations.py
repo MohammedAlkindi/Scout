@@ -17,13 +17,14 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from time import monotonic
+from time import monotonic, perf_counter
 from typing import Optional
 
 import httpx
 
 from server import config
 from server.errors import NoCandidatesFoundError, RateLimitedError, UpstreamServiceError
+from server.observability import record_upstream_call
 from server.rate_limiter import TokenBucket
 from server.services.scorer import CrowdLevel
 
@@ -308,6 +309,7 @@ def _image_info(tags: dict) -> tuple[Optional[str], Optional[str]]:
 
 
 async def _fetch_overpass_json(client: httpx.AsyncClient, endpoint: str, query: str) -> dict:
+    started = perf_counter()
     try:
         response = await client.post(
             endpoint,
@@ -316,15 +318,20 @@ async def _fetch_overpass_json(client: httpx.AsyncClient, endpoint: str, query: 
         )
         response.raise_for_status()
         data = response.json()
+        record_upstream_call("overpass", "success", round((perf_counter() - started) * 1000), response.status_code)
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
         if status_code == 429:
             _start_endpoint_cooldown(endpoint)
+            record_upstream_call("overpass", "rate_limited", round((perf_counter() - started) * 1000), status_code)
             raise RateLimitedError(_LOCATION_RATE_LIMIT_MESSAGE) from exc
+        record_upstream_call("overpass", "http_error", round((perf_counter() - started) * 1000), status_code)
         raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE) from exc
     except httpx.TimeoutException as exc:
+        record_upstream_call("overpass", "timeout", round((perf_counter() - started) * 1000))
         raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE) from exc
     except (httpx.HTTPError, ValueError) as exc:
+        record_upstream_call("overpass", "error", round((perf_counter() - started) * 1000))
         raise UpstreamServiceError(_LOCATION_UNAVAILABLE_MESSAGE) from exc
 
     if not isinstance(data, dict):

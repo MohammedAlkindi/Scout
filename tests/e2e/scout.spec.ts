@@ -75,6 +75,15 @@ test("does not create duplicate untouched sessions from repeated New Scout click
   const newScoutButton = page.locator("#new-session");
   await expect(sessionRows).toHaveCount(2);
 
+  await page.getByPlaceholder("Search scouts").fill("Muscat");
+  await expect(sessionRows).toHaveCount(1);
+  await expect(page.getByText("Try Muscat sunset scout")).toBeVisible();
+  await page.getByPlaceholder("Search scouts").fill("no matching scout");
+  await expect(sessionRows).toHaveCount(0);
+  await expect(page.getByText("No sessions match this search.")).toBeVisible();
+  await page.getByPlaceholder("Search scouts").fill("");
+  await expect(sessionRows).toHaveCount(2);
+
   await newScoutButton.click();
   await newScoutButton.click();
   await newScoutButton.click();
@@ -114,6 +123,19 @@ test("sets a manual location and renders map-first recommendations", async ({ pa
   await expect(page.locator("#recommendation-1").getByText("Image fallback")).toBeVisible();
   await expect(page.locator("#recommendation-1").getByRole("button", { name: "Copy report" })).toBeVisible();
   await expect(page.locator("#recommendation-1").getByText("What to verify")).toBeVisible();
+
+  const resultScreenshot = await page.locator("#recommendation-1").screenshot();
+  expect(resultScreenshot.byteLength).toBeGreaterThan(1000);
+
+  const shareLink = page.getByRole("link", { name: "Open share link" });
+  await expect(page.getByRole("button", { name: "Copy share link" })).toBeVisible();
+  const shareHref = await shareLink.getAttribute("href");
+  expect(shareHref).toContain("?share=");
+
+  await page.goto(shareHref ?? "/");
+  await expect(page).not.toHaveURL(/share=/);
+  await expect(page.locator("#active-session-title")).toHaveText("Shared: romantic coastal portraits");
+  await expect(page.locator("#recommendation-1").getByRole("heading", { name: "Azaiba Beach Park" })).toBeVisible();
 });
 
 test("shows recovery actions when live scout fails", async ({ page }) => {
@@ -161,18 +183,20 @@ test("persists settings changes and applies them to recommendation units and tim
   await page.getByRole("button", { name: "Open settings" }).click();
   const settingsPanel = page.locator("#settings-panel");
   await expect(settingsPanel.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(settingsPanel.getByRole("button", { name: "Close settings" })).toBeFocused();
 
   await settingsPanel.getByRole("button", { name: "metric" }).click();
   await settingsPanel.getByRole("button", { name: "24h" }).click();
   await settingsPanel.getByRole("button", { name: "dark" }).click();
   await settingsPanel.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.getByRole("button", { name: "Open settings" })).toBeFocused();
 
   await page.getByRole("button", { name: "Preferences" }).click();
   await expect(page.locator(".insight-card").filter({ hasText: "Units" }).getByText("metric")).toBeVisible();
   await expect(page.locator(".insight-card").filter({ hasText: "Time" }).getByText("24h")).toBeVisible();
   await expect(page.locator(".insight-card").filter({ hasText: "Theme" }).getByText("dark")).toBeVisible();
 
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
   await page.getByPlaceholder("37.7749").fill("23.5791");

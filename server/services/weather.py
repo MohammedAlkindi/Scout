@@ -14,11 +14,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from time import perf_counter
 
 import httpx
 
 from server import config
 from server.errors import UpstreamServiceError
+from server.observability import record_upstream_call
 from server.rate_limiter import TokenBucket
 from server.services.scorer import WeatherSnapshot
 
@@ -105,12 +107,26 @@ async def fetch_conditions(lat: float, lng: float) -> ConditionsResult:
         "timezone": "UTC",
     }
 
+    started = perf_counter()
     try:
         async with httpx.AsyncClient(timeout=config.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(config.OPEN_METEO_BASE_URL, params=params)
             response.raise_for_status()
             data = response.json()
+            record_upstream_call("open_meteo", "success", round((perf_counter() - started) * 1000), response.status_code)
+    except httpx.HTTPStatusError as exc:
+        record_upstream_call(
+            "open_meteo",
+            "http_error",
+            round((perf_counter() - started) * 1000),
+            exc.response.status_code,
+        )
+        raise UpstreamServiceError("Weather data is temporarily unavailable.") from exc
+    except httpx.TimeoutException as exc:
+        record_upstream_call("open_meteo", "timeout", round((perf_counter() - started) * 1000))
+        raise UpstreamServiceError("Weather data is temporarily unavailable.") from exc
     except (httpx.HTTPError, ValueError) as exc:
+        record_upstream_call("open_meteo", "error", round((perf_counter() - started) * 1000))
         raise UpstreamServiceError("Weather data is temporarily unavailable.") from exc
 
     return _parse_conditions(data)

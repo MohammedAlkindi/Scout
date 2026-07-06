@@ -130,6 +130,6 @@ them as developer-only metadata.
 - Add optional live crowd or popularity signals.
 - Add a richer imagery provider behind a provider interface.
 - Tune scoring weights with real user feedback.
-- Add telemetry around score distribution and empty-search causes.
+- Export score-distribution and empty-search telemetry to a durable hosted sink
+  if Scout needs historical product analytics.
 - Add tests for recommendation ranking edge cases across shot types.
-

@@ -53,6 +53,29 @@ Response:
 }
 ```
 
+## `GET /api/diagnostics`
+
+Returns process-local, privacy-safe telemetry for smoke checks and operational
+debugging. The response includes counters and recent structured events for API
+requests, upstream calls, Scout errors, and completed recommendations.
+
+The endpoint intentionally avoids raw intent text and precise location history.
+Recommendation events use coarse coordinate and radius buckets.
+
+Response shape:
+
+```json
+{
+  "status": "ok",
+  "generated_at": "2026-07-06T13:30:00.000000+00:00",
+  "counters": {
+    "http_request": 12,
+    "upstream_call.open_meteo.success": 4
+  },
+  "recent_events": []
+}
+```
+
 ## `GET /api/golden-hour`
 
 Returns sunrise, sunset, solar noon, golden-hour windows, blue-hour windows,
@@ -229,5 +252,8 @@ high, medium, low
 - Places are sourced from OpenStreetMap/Overpass.
 - Crowd, permit, access, and media fields are inferred from public map tags.
 - Result cards expose trust badges for live, estimated, and fallback signals.
+- The browser can create read-only share links by encoding one recommendation
+  response into the URL. Shared links hydrate locally and do not require backend
+  storage.
 - Clients should treat caveats as part of the recommendation, not secondary
   metadata.

@@ -87,6 +87,7 @@ Verify after deploy:
 
 ```bash
 curl https://scoutphotography.vercel.app/api/health
+curl https://scoutphotography.vercel.app/api/diagnostics
 curl https://scoutphotography.vercel.app/index.html
 ```
 
@@ -96,9 +97,11 @@ Demo-day smoke check:
 2. Confirm `Try Muscat sunset scout` appears in the sidebar.
 3. Open the demo session and verify the map, ranked cards, trust badges, and
    report export buttons render.
-4. Start a live scout with manual coordinates near Muscat
+4. Copy or open the read-only share link and verify it recreates the scout
+   result without signing in.
+5. Start a live scout with manual coordinates near Muscat
    (`23.5793, 58.4025`) and activity `Coastal sunset`.
-5. If a provider is slow, the Muscat demo-style request should return
+6. If a provider is slow, the Muscat demo-style request should return
    `demo_mode: true` instead of leaving the user with a dead end.
 
 Check recent server errors:

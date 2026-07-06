@@ -81,7 +81,7 @@ Rules:
 Python unit tests:
 
 ```bash
-pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
+pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py tests/test_observability.py -q
 ```
 
 Browser regression tests:
@@ -96,7 +96,7 @@ Full local verification:
 npm run typecheck
 npm run build
 npm run test:e2e
-pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
+pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py tests/test_observability.py -q
 ```
 
 ## Playwright
@@ -107,8 +107,12 @@ reuses an existing server if one is already running.
 The current E2E coverage checks:
 
 - repeated New Scout clicks do not create duplicate untouched sessions
+- sidebar search filters saved sessions and shows an empty state
 - manual location and activity submission renders map-first recommendations
+- result pages expose a read-only share link and imported share links hydrate
+  into local sessions
 - settings changes persist and affect result units/time formatting
+- settings drawer focus returns to the opener after close
 - empty recommendation responses render a useful recovery state
 - result cards expose trust badges and report export controls
 - failed live scouting shows recovery actions and can open the bundled demo

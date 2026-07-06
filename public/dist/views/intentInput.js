@@ -198,6 +198,7 @@ export function renderIntentInput(root, session, settings, handlers) {
     const activityField = document.createElement("div");
     activityField.className = "field activity-picker";
     const activityLabel = document.createElement("span");
+    activityLabel.id = `activity-label-${session.id}`;
     activityLabel.className = "label";
     activityLabel.textContent = "Activity";
     const activitySearch = document.createElement("input");
@@ -205,8 +206,10 @@ export function renderIntentInput(root, session, settings, handlers) {
     activitySearch.type = "search";
     activitySearch.placeholder = "Search activities";
     activitySearch.autocomplete = "off";
+    activitySearch.setAttribute("aria-labelledby", activityLabel.id);
     const activityGrid = document.createElement("div");
     activityGrid.className = "activity-grid";
+    activityGrid.setAttribute("role", "list");
     activityField.append(activityLabel, activitySearch, activityGrid);
     fields.append(locationField, activityField);
     const controls = document.createElement("div");
@@ -295,6 +298,7 @@ export function renderIntentInput(root, session, settings, handlers) {
             button.className = `activity-card${activity.id === selectedActivity.id ? " activity-card--selected" : ""}`;
             button.type = "button";
             button.setAttribute("aria-pressed", String(activity.id === selectedActivity.id));
+            button.setAttribute("aria-label", `${activity.label}: ${activity.description}`);
             const label = document.createElement("span");
             label.className = "activity-card__label";
             label.textContent = activity.label;

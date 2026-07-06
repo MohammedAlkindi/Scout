@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from server import config, orchestration
 from server.errors import InvalidRequestError, NoCandidatesFoundError, RateLimitedError, ScoutError, UpstreamServiceError
+from server.observability import record_http_request, record_recommendation, record_scout_error, telemetry
 from server.rate_limiter import TokenBucket
 from server.schemas import (
     ConditionsResponse,
@@ -48,6 +49,26 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def telemetry_middleware(request: Request, call_next):
+    started = perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        if request.url.path.startswith("/api"):
+            record_http_request(request.method, request.url.path, 500, round((perf_counter() - started) * 1000))
+        raise
+
+    if request.url.path.startswith("/api"):
+        record_http_request(
+            request.method,
+            request.url.path,
+            response.status_code,
+            round((perf_counter() - started) * 1000),
+        )
+    return response
 
 # Per-client-IP inbound rate limiting, independent of the outbound limiters
 # in server/services/weather.py and server/services/locations.py. Buckets
@@ -107,6 +128,7 @@ _ERROR_META: dict[type, dict[str, object]] = {
 @app.exception_handler(ScoutError)
 async def scout_error_handler(request: Request, exc: ScoutError) -> JSONResponse:
     status_code = _ERROR_STATUS.get(type(exc), 500)
+    record_scout_error(request.url.path, type(exc).__name__, status_code)
     meta = _ERROR_META.get(
         type(exc),
         {
@@ -121,12 +143,18 @@ async def scout_error_handler(request: Request, exc: ScoutError) -> JSONResponse
 @app.exception_handler(Exception)
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled error in %s", request.url.path)
+    record_scout_error(request.url.path, type(exc).__name__, 500)
     return JSONResponse(status_code=500, content={"error": "An unexpected error occurred. Please try again."})
 
 
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/diagnostics")
+async def diagnostics() -> dict[str, object]:
+    return telemetry.snapshot()
 
 
 @app.get("/api/golden-hour", response_model=GoldenHourResponse, dependencies=[_rate_limited])
@@ -188,14 +216,16 @@ async def recommendation_route(body: RecommendationRequest) -> RecommendationRes
         body.latitude, body.longitude, body.intent, body.radius_miles, body.shot_type
     )
     elapsed_ms = round((perf_counter() - started) * 1000)
-    logger.info(
-        "recommendation_complete lat=%.3f lng=%.3f shot_type=%s count=%s demo_mode=%s elapsed_ms=%s",
+    top = response.recommendations[0] if response.recommendations else None
+    record_recommendation(
         body.latitude,
         body.longitude,
-        response.shot_type,
+        body.radius_miles,
+        response.shot_type.value,
         len(response.recommendations),
         response.demo_mode,
         elapsed_ms,
+        top.score if top is not None else None,
     )
     return response
 
