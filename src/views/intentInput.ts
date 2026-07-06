@@ -5,48 +5,168 @@ export interface IntentInputHandlers {
   onSubmit: (intent: string, shotType: ShotType | undefined) => Promise<void>;
 }
 
-const SHOT_TYPES: ReadonlyArray<{ value: ShotType; label: string }> = [
-  { value: "landscape", label: "Landscape" },
-  { value: "portrait", label: "Portrait" },
-  { value: "astro", label: "Astro" },
-  { value: "wildlife", label: "Wildlife" },
-  { value: "urban", label: "Urban" },
-  { value: "hiking", label: "Hiking" },
-];
+interface ActivityOption {
+  id: string;
+  label: string;
+  description: string;
+  intent: string;
+  shotType: ShotType;
+  featured: boolean;
+  keywords: readonly string[];
+}
 
-const STARTER_PROMPTS: ReadonlyArray<{ label: string; prompt: string; shotType: ShotType }> = [
+const ACTIVITY_OPTIONS: ReadonlyArray<ActivityOption> = [
   {
+    id: "coastal-sunset",
     label: "Coastal sunset",
-    prompt: "Find a clean coastal sunset angle with foreground texture and low wind.",
+    description: "Clean light, open horizon, and foreground texture.",
+    intent: "sunset landscape near the coast with foreground texture",
     shotType: "landscape",
+    featured: true,
+    keywords: ["sunset", "coast", "beach", "landscape", "golden"],
   },
   {
+    id: "quiet-portrait",
     label: "Quiet portrait",
-    prompt: "Find a quiet portrait location with soft light, shade, and easy access.",
+    description: "Soft light, shade, and easy access for people photos.",
+    intent: "quiet portrait location with soft light shade and easy access",
     shotType: "portrait",
+    featured: true,
+    keywords: ["portrait", "people", "soft", "shade", "romantic"],
   },
   {
+    id: "romantic-couples",
+    label: "Couples shoot",
+    description: "Low-friction location for romantic or engagement photos.",
+    intent: "romantic couple portrait location with soft light and low crowds",
+    shotType: "portrait",
+    featured: true,
+    keywords: ["romantic", "couple", "engagement", "wedding", "portrait"],
+  },
+  {
+    id: "blue-hour-skyline",
     label: "Blue-hour skyline",
-    prompt: "Find an urban blue-hour viewpoint with strong lines and visible city lights.",
+    description: "Urban viewpoint with lines, lights, and twilight color.",
+    intent: "urban blue hour viewpoint with strong lines and city lights",
     shotType: "urban",
+    featured: true,
+    keywords: ["blue hour", "skyline", "urban", "city", "architecture"],
   },
   {
+    id: "morning-trail",
     label: "Morning trail",
-    prompt: "Find a short morning hike with good visibility and a scenic payoff.",
+    description: "Short hike with visibility and a scenic payoff.",
+    intent: "short morning hiking trail with good visibility and scenic viewpoint",
     shotType: "hiking",
+    featured: true,
+    keywords: ["hike", "trail", "morning", "viewpoint", "outdoor"],
+  },
+  {
+    id: "street-photography",
+    label: "Street photography",
+    description: "Walkable urban area with texture and public activity.",
+    intent: "urban street photography location with texture and public activity",
+    shotType: "urban",
+    featured: false,
+    keywords: ["street", "urban", "city", "walk", "documentary"],
+  },
+  {
+    id: "architecture",
+    label: "Architecture",
+    description: "Buildings, geometry, and clean urban compositions.",
+    intent: "urban architecture photography location with strong geometry",
+    shotType: "urban",
+    featured: false,
+    keywords: ["architecture", "building", "urban", "lines", "geometry"],
+  },
+  {
+    id: "astro",
+    label: "Night sky",
+    description: "Dark, elevated, or open areas for stars and night scenes.",
+    intent: "night sky astro photography viewpoint away from bright city lights",
+    shotType: "astro",
+    featured: false,
+    keywords: ["astro", "stars", "night", "dark", "milky way"],
+  },
+  {
+    id: "wildlife",
+    label: "Wildlife",
+    description: "Nature reserve, park, or quiet habitat with low disturbance.",
+    intent: "wildlife photography nature reserve or quiet park with low disturbance",
+    shotType: "wildlife",
+    featured: false,
+    keywords: ["wildlife", "animal", "nature", "reserve", "park"],
+  },
+  {
+    id: "birding",
+    label: "Birding",
+    description: "Water, reserve, or green space with open sightlines.",
+    intent: "bird photography location near water nature reserve or open park",
+    shotType: "wildlife",
+    featured: false,
+    keywords: ["bird", "birding", "wildlife", "water", "reserve"],
+  },
+  {
+    id: "beach-portraits",
+    label: "Beach portraits",
+    description: "Coastal portrait spot with soft light and simple access.",
+    intent: "beach portrait location with soft light and easy access",
+    shotType: "portrait",
+    featured: false,
+    keywords: ["beach", "portrait", "coast", "soft", "romantic"],
+  },
+  {
+    id: "waterfront",
+    label: "Waterfront",
+    description: "Reflections, water texture, and open light.",
+    intent: "waterfront landscape photography location with reflections and open light",
+    shotType: "landscape",
+    featured: false,
+    keywords: ["water", "waterfront", "reflection", "landscape", "lake"],
+  },
+  {
+    id: "viewpoint",
+    label: "Scenic viewpoint",
+    description: "High-value overlook for broad landscape compositions.",
+    intent: "scenic viewpoint for landscape photography with good visibility",
+    shotType: "landscape",
+    featured: false,
+    keywords: ["viewpoint", "overlook", "landscape", "mountain", "visibility"],
+  },
+  {
+    id: "park-walk",
+    label: "Park walk",
+    description: "Easy outdoor route for casual scouting and photos.",
+    intent: "easy park walk with good light and low access friction",
+    shotType: "hiking",
+    featured: false,
+    keywords: ["park", "walk", "easy", "casual", "outdoor"],
   },
 ];
 
-function inferInitialShotType(settings: Settings): ShotType | undefined {
+function defaultActivity(): ActivityOption {
+  const first = ACTIVITY_OPTIONS[0];
+  if (first === undefined) {
+    throw new Error("Scout requires at least one activity option.");
+  }
+  return first;
+}
+
+function inferInitialActivity(session: Session, settings: Settings): ActivityOption {
+  const saved = ACTIVITY_OPTIONS.find((activity) => activity.intent === session.intent);
+  if (saved !== undefined) {
+    return saved;
+  }
   const preferred = settings.activityTypes.find((activity) =>
-    SHOT_TYPES.some((shotType) => shotType.value === activity),
+    ACTIVITY_OPTIONS.some((option) => option.shotType === activity),
   );
-  return preferred as ShotType | undefined;
+  const preferredActivity = ACTIVITY_OPTIONS.find((activity) => activity.shotType === preferred);
+  return preferredActivity ?? defaultActivity();
 }
 
 function renderStarterWorkspace(
   root: HTMLElement,
-  onPickPrompt: (prompt: string, shotType: ShotType) => void,
+  onPickActivity: (activity: ActivityOption) => void,
 ): void {
   const workspace = document.createElement("section");
   workspace.className = "starter-workspace";
@@ -56,21 +176,21 @@ function renderStarterWorkspace(
   eyebrow.textContent = "Ready to scout";
 
   const title = document.createElement("h1");
-  title.textContent = "Plan the shot before you leave.";
+  title.textContent = "Choose the kind of scout you need.";
 
   const body = document.createElement("p");
   body.textContent =
-    "Describe the subject, mood, terrain, or timing you want. Scout ranks nearby places against light, weather, distance, and access.";
+    "Scout turns a selected activity into a focused location search, then ranks places against light, weather, distance, and access.";
 
   const grid = document.createElement("div");
   grid.className = "starter-grid";
 
-  for (const starter of STARTER_PROMPTS) {
+  for (const starter of ACTIVITY_OPTIONS.filter((activity) => activity.featured)) {
     const button = document.createElement("button");
     button.className = "starter-card";
     button.type = "button";
     button.addEventListener("click", () => {
-      onPickPrompt(starter.prompt, starter.shotType);
+      onPickActivity(starter);
     });
 
     const cardLabel = document.createElement("span");
@@ -78,7 +198,7 @@ function renderStarterWorkspace(
     cardLabel.textContent = starter.label;
     const cardPrompt = document.createElement("span");
     cardPrompt.className = "starter-card__prompt";
-    cardPrompt.textContent = starter.prompt;
+    cardPrompt.textContent = starter.description;
     button.append(cardLabel, cardPrompt);
     grid.appendChild(button);
   }
@@ -93,7 +213,7 @@ export function renderIntentInput(
   settings: Settings,
   handlers: IntentInputHandlers,
 ): void {
-  let selectedShotType = inferInitialShotType(settings);
+  let selectedActivity = inferInitialActivity(session, settings);
   let isSubmitting = false;
   const isNewScout = session.results === null;
 
@@ -115,42 +235,27 @@ export function renderIntentInput(
   locationInput.readOnly = true;
   locationField.append(locationLabel, locationInput);
 
-  const intentField = document.createElement("label");
-  intentField.className = "field";
-  const intentLabel = document.createElement("span");
-  intentLabel.className = "label";
-  intentLabel.textContent = "Intent";
-  const intentInput = document.createElement("textarea");
-  intentInput.className = "textarea";
-  intentInput.placeholder = "Describe what you want to shoot or do.";
-  intentInput.value = session.intent;
-  intentInput.rows = 2;
-  intentField.append(intentLabel, intentInput);
+  const activityField = document.createElement("div");
+  activityField.className = "field activity-picker";
+  const activityLabel = document.createElement("span");
+  activityLabel.className = "label";
+  activityLabel.textContent = "Activity";
+  const activitySearch = document.createElement("input");
+  activitySearch.className = "input activity-picker__search";
+  activitySearch.type = "search";
+  activitySearch.placeholder = "Search activities";
+  activitySearch.autocomplete = "off";
+  const activityGrid = document.createElement("div");
+  activityGrid.className = "activity-grid";
+  activityField.append(activityLabel, activitySearch, activityGrid);
 
-  fields.append(locationField, intentField);
+  fields.append(locationField, activityField);
 
   const controls = document.createElement("div");
-  controls.className = "field";
+  controls.className = "field composer__actions";
 
-  const shotLabel = document.createElement("span");
-  shotLabel.className = "label";
-  shotLabel.textContent = "Activity";
-  const shotSelect = document.createElement("select");
-  shotSelect.className = "select";
-  const autoOption = document.createElement("option");
-  autoOption.value = "";
-  autoOption.textContent = "Auto";
-  shotSelect.appendChild(autoOption);
-  for (const shotType of SHOT_TYPES) {
-    const option = document.createElement("option");
-    option.value = shotType.value;
-    option.textContent = shotType.label;
-    option.selected = shotType.value === selectedShotType;
-    shotSelect.appendChild(option);
-  }
-  shotSelect.addEventListener("change", () => {
-    selectedShotType = shotSelect.value === "" ? undefined : (shotSelect.value as ShotType);
-  });
+  const selectedSummary = document.createElement("p");
+  selectedSummary.className = "activity-summary";
 
   const submit = document.createElement("button");
   submit.className = "button button--primary";
@@ -161,17 +266,71 @@ export function renderIntentInput(
   status.className = "status";
   status.setAttribute("role", "status");
 
-  controls.append(shotLabel, shotSelect, submit);
+  controls.append(selectedSummary, submit);
   form.append(fields, controls);
+
+  function matchesActivity(activity: ActivityOption, query: string): boolean {
+    if (!query) {
+      return true;
+    }
+    const haystack = [activity.label, activity.description, activity.intent, ...activity.keywords].join(" ").toLowerCase();
+    return haystack.includes(query);
+  }
+
+  function renderActivities(): void {
+    const query = activitySearch.value.trim().toLowerCase();
+    const matches = ACTIVITY_OPTIONS.filter((activity) => matchesActivity(activity, query));
+    if (query && !matches.some((activity) => activity.id === selectedActivity.id)) {
+      const firstMatch = matches[0];
+      if (firstMatch !== undefined) {
+        selectedActivity = firstMatch;
+      }
+    }
+    activityGrid.textContent = "";
+
+    for (const activity of matches) {
+      const button = document.createElement("button");
+      button.className = `activity-card${activity.id === selectedActivity.id ? " activity-card--selected" : ""}`;
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(activity.id === selectedActivity.id));
+
+      const label = document.createElement("span");
+      label.className = "activity-card__label";
+      label.textContent = activity.label;
+      const description = document.createElement("span");
+      description.className = "activity-card__description";
+      description.textContent = activity.description;
+      button.append(label, description);
+
+      button.addEventListener("click", () => {
+        selectedActivity = activity;
+        renderActivities();
+      });
+
+      activityGrid.appendChild(button);
+    }
+
+    if (matches.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "activity-picker__empty";
+      empty.textContent = "No activity match. Try portrait, sunset, hiking, wildlife, urban, or beach.";
+      activityGrid.appendChild(empty);
+    }
+
+    selectedSummary.textContent = `${selectedActivity.label} / ${selectedActivity.shotType}`;
+  }
+
+  activitySearch.addEventListener("input", renderActivities);
+  renderActivities();
+
+  root.append(form, status);
   if (isNewScout) {
-    renderStarterWorkspace(root, (prompt, shotType) => {
-      selectedShotType = shotType;
-      intentInput.value = prompt;
-      shotSelect.value = shotType;
-      intentInput.focus();
+    renderStarterWorkspace(root, (activity) => {
+      selectedActivity = activity;
+      renderActivities();
+      form.scrollIntoView({ block: "center" });
     });
   }
-  root.append(form, status);
 
   function renderSkeleton(): HTMLElement {
     const skeleton = document.createElement("section");
@@ -191,14 +350,6 @@ export function renderIntentInput(
       return;
     }
 
-    const intent = intentInput.value.trim();
-    if (!intent) {
-      status.className = "status status--error";
-      status.textContent = "Describe what you want to shoot or do. Scout will find the right place and time.";
-      intentInput.focus();
-      return;
-    }
-
     isSubmitting = true;
     submit.disabled = true;
     status.className = "status";
@@ -207,7 +358,7 @@ export function renderIntentInput(
     root.appendChild(skeleton);
 
     handlers
-      .onSubmit(intent, selectedShotType)
+      .onSubmit(selectedActivity.intent, selectedActivity.shotType)
       .catch((error: unknown) => {
         isSubmitting = false;
         submit.disabled = false;

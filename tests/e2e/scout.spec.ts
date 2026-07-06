@@ -80,12 +80,15 @@ test("does not create duplicate untouched sessions from repeated New Scout click
   await newScoutButton.click();
 
   await expect(sessionRows).toHaveCount(2);
-  await expect(page.getByText("Location pending / No intent yet")).toBeVisible();
+  await expect(page.getByText("Location pending / No activity yet")).toBeVisible();
 });
 
 test("sets a manual location and renders map-first recommendations", async ({ page }) => {
   await page.route("**/api/recommendation", async (route) => {
     expect(route.request().method()).toBe("POST");
+    const requestBody = route.request().postDataJSON() as { intent?: unknown; shot_type?: unknown };
+    expect(requestBody.intent).toBe("quiet portrait location with soft light shade and easy access");
+    expect(requestBody.shot_type).toBe("portrait");
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -98,8 +101,9 @@ test("sets a manual location and renders map-first recommendations", async ({ pa
   await page.getByPlaceholder("-122.4194").fill("58.4026");
   await page.getByRole("button", { name: "Use coordinates" }).click();
 
-  await expect(page.getByRole("heading", { name: "Plan the shot before you leave." })).toBeVisible();
-  await page.getByPlaceholder("Describe what you want to shoot or do.").fill("romantic coastal portraits");
+  await expect(page.getByRole("heading", { name: "Choose the kind of scout you need." })).toBeVisible();
+  await page.getByPlaceholder("Search activities").fill("portrait");
+  await page.locator(".composer").getByRole("button", { name: /Quiet portrait/ }).click();
   await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Recommended scouting route" })).toBeVisible();

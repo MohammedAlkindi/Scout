@@ -70,7 +70,9 @@
   --app-min-width: 320px;
   --topbar-height: 64px;
   --composer-location-min: 160px;
-  --composer-intent-min: 220px;
+  --composer-activity-min: 360px;
+  --activity-card-min: 168px;
+  --activity-picker-max-height: 214px;
   --textarea-min-height: 74px;
   --status-min-height: 22px;
   --state-min-height: 560px;
@@ -653,8 +655,12 @@ a {
 
 .composer__fields {
   display: grid;
-  grid-template-columns: minmax(var(--composer-location-min), 0.75fr) minmax(var(--composer-intent-min), 1.25fr);
+  grid-template-columns: minmax(var(--composer-location-min), 0.55fr) minmax(var(--composer-activity-min), 1.45fr);
   gap: var(--space-3);
+}
+
+.composer__actions {
+  min-width: 144px;
 }
 
 .field {
@@ -698,6 +704,83 @@ a {
 .textarea {
   min-height: var(--textarea-min-height);
   resize: vertical;
+}
+
+.activity-picker {
+  min-width: 0;
+}
+
+.activity-picker__search {
+  min-height: 34px;
+}
+
+.activity-grid {
+  display: grid;
+  max-height: var(--activity-picker-max-height);
+  grid-template-columns: repeat(2, minmax(var(--activity-card-min), 1fr));
+  gap: var(--space-2);
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.activity-card {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 68px;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-input);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.activity-card:hover,
+.activity-card:focus-visible {
+  border-color: var(--color-focus);
+  background: var(--color-surface-raised);
+}
+
+.activity-card--selected {
+  border-color: var(--color-focus);
+  background: color-mix(in srgb, var(--color-accent-golden), transparent 88%);
+  box-shadow: inset 0 0 0 var(--border-width) color-mix(in srgb, var(--color-focus), transparent 28%);
+}
+
+.activity-card__label,
+.activity-card__description {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-card__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--line-tight);
+  white-space: nowrap;
+}
+
+.activity-card__description {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--line-normal);
+}
+
+.activity-summary,
+.activity-picker__empty {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.activity-summary {
+  min-height: 32px;
 }
 
 .input::placeholder,
@@ -1574,6 +1657,7 @@ a {
 
   .composer,
   .composer__fields,
+  .activity-grid,
   .starter-grid,
   .location-actions,
   .results-map__body,

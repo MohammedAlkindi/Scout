@@ -140,8 +140,8 @@ function renderSidebar(elements: AppElements, state: AppState, renderApp: () => 
     title.textContent = session.name;
     const meta = document.createElement("span");
     meta.className = "session-button__meta";
-    const intent = session.intent.trim() || "No intent yet";
-    meta.textContent = `${session.location.label} / ${intent} / ${formatSessionTime(session.createdAt)}`;
+    const activity = session.intent.trim() || "No activity yet";
+    meta.textContent = `${session.location.label} / ${activity} / ${formatSessionTime(session.createdAt)}`;
     text.append(title, meta);
 
     const menu = document.createElement("span");

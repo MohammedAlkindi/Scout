@@ -391,7 +391,7 @@ export function renderResults(root, response, settings) {
         const title = document.createElement("h1");
         title.textContent = "No recommendations found";
         const body = document.createElement("p");
-        body.textContent = "Try a wider radius or a less specific scouting intent.";
+        body.textContent = "Try a wider radius or a different activity.";
         empty.append(title, body);
         root.appendChild(empty);
         return;
