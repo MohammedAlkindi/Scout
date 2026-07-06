@@ -108,8 +108,11 @@ The current E2E coverage checks:
 
 - repeated New Scout clicks do not create duplicate untouched sessions
 - manual location and activity submission renders map-first recommendations
+- settings changes persist and affect result units/time formatting
+- empty recommendation responses render a useful recovery state
 - result cards expose trust badges and report export controls
 - failed live scouting shows recovery actions and can open the bundled demo
+- the main scouting flow remains usable at a 390px mobile viewport
 
 ## Useful Manual QA
 

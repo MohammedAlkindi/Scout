@@ -36,7 +36,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Python tests
-        run: python -m pytest tests/test_scorer.py tests/test_golden_hour.py -q
+        run: python -m pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
 
       - name: Type-check frontend
         run: npm run typecheck

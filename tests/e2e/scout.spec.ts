@@ -148,6 +148,71 @@ test("shows recovery actions when live scout fails", async ({ page }) => {
   await expect(page.locator(".source-notice").getByText("Demo fallback", { exact: true })).toBeVisible();
 });
 
+test("persists settings changes and applies them to recommendation units and time format", async ({ page }) => {
+  await page.route("**/api/recommendation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(recommendationFixture),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const settingsPanel = page.locator("#settings-panel");
+  await expect(settingsPanel.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+  await settingsPanel.getByRole("button", { name: "metric" }).click();
+  await settingsPanel.getByRole("button", { name: "24h" }).click();
+  await settingsPanel.getByRole("button", { name: "dark" }).click();
+  await settingsPanel.getByRole("button", { name: "Close settings" }).click();
+
+  await page.getByRole("button", { name: "Preferences" }).click();
+  await expect(page.locator(".insight-card").filter({ hasText: "Units" }).getByText("metric")).toBeVisible();
+  await expect(page.locator(".insight-card").filter({ hasText: "Time" }).getByText("24h")).toBeVisible();
+  await expect(page.locator(".insight-card").filter({ hasText: "Theme" }).getByText("dark")).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.getByPlaceholder("37.7749").fill("23.5791");
+  await page.getByPlaceholder("-122.4194").fill("58.4026");
+  await page.getByRole("button", { name: "Use coordinates" }).click();
+
+  await page.getByPlaceholder("Search activities").fill("portrait");
+  await page.locator(".composer").getByRole("button", { name: /Quiet portrait/ }).click();
+  await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
+
+  await expect(page.locator(".route-list").getByText("6.0 km")).toBeVisible();
+  await expect(page.locator("#recommendation-1")).toContainText(/\d{2}:\d{2} - \d{2}:\d{2}/);
+  await expect(page.locator("#recommendation-1")).not.toContainText(/AM|PM/);
+});
+
+test("renders a useful empty state when the API returns no recommendations", async ({ page }) => {
+  await page.route("**/api/recommendation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...recommendationFixture,
+        recommendations: [],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByPlaceholder("37.7749").fill("23.5791");
+  await page.getByPlaceholder("-122.4194").fill("58.4026");
+  await page.getByRole("button", { name: "Use coordinates" }).click();
+
+  await page.getByPlaceholder("Search activities").fill("portrait");
+  await page.locator(".composer").getByRole("button", { name: /Quiet portrait/ }).click();
+  await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "No recommendations found" })).toBeVisible();
+  await expect(page.getByText("Try a wider radius or a different activity.")).toBeVisible();
+});
+
 test("keeps the main scouting flow usable on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route("**/api/recommendation", async (route) => {

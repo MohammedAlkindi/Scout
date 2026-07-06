@@ -15,7 +15,7 @@ trust, polish, and repeatability.
 
 - Add provider abstraction for optional richer place imagery.
 - Add visual regression screenshots for the main result page.
-- Expand E2E coverage for settings, conditions, preferences, and empty states.
+- Expand E2E coverage for conditions and deeper preference workflows.
 - Add durable observability for upstream latency, rate limits, empty searches,
   and error rates.
 - Add structured recommendation telemetry that does not collect sensitive user
