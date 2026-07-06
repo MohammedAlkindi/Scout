@@ -1,6 +1,6 @@
 import { fetchRecommendation } from "./api.js";
 import { applySettings, initSettingsPanel } from "./settings.js";
-import { createSession, createDemoSession, deleteSession, duplicateSession, loadSessions, loadSettings, saveSettings, saveSessions, upsertSession, } from "./storage.js";
+import { createSession, createDemoSession, DEMO_SESSION_NAME, deleteSession, duplicateSession, loadSessions, loadSettings, saveSettings, saveSessions, upsertSession, } from "./storage.js";
 import { renderIntentInput } from "./views/intentInput.js";
 import { renderLocationGrant } from "./views/locationGrant.js";
 import { renderResults } from "./views/results.js";
@@ -44,6 +44,15 @@ function sessionHasLocation(session) {
 function isUntouchedDraft(session) {
     return !sessionHasLocation(session) && session.intent.trim() === "" && session.results === null;
 }
+function isDemoSession(session) {
+    return session.name === DEMO_SESSION_NAME && session.location.label === "Muscat, Oman";
+}
+function ensureDemoSession(sessions) {
+    if (sessions.some(isDemoSession)) {
+        return sessions;
+    }
+    return [...sessions, createDemoSession()];
+}
 function defaultSessionName(location, intent) {
     if (intent.trim()) {
         return intent.trim().slice(0, 42);
@@ -53,6 +62,18 @@ function defaultSessionName(location, intent) {
 function updateSession(state, session) {
     state.sessions = upsertSession(session);
     state.activeSessionId = session.id;
+}
+function openDemoSession(state) {
+    const existingDemo = state.sessions.find(isDemoSession);
+    if (existingDemo !== undefined) {
+        state.activeSessionId = existingDemo.id;
+        saveSessions(state.sessions);
+        return;
+    }
+    const demo = createDemoSession();
+    state.sessions = [...state.sessions, demo];
+    state.activeSessionId = demo.id;
+    saveSessions(state.sessions);
 }
 function setActiveNav(elements, state, activeNav) {
     state.activeNav = activeNav;
@@ -184,6 +205,11 @@ function renderActiveSession(elements, state, renderApp) {
             updateSession(state, nextSession);
             renderApp();
         },
+        onUseDemo: () => {
+            openDemoSession(state);
+            setActiveNav(elements, state, "sessions");
+            renderApp();
+        },
     });
     if (session.results !== null) {
         renderResults(wrapper, session.results, state.settings);
@@ -254,8 +280,8 @@ function main() {
     const elements = getElements();
     const sessions = loadSessions();
     const firstSession = sessions[0] ?? createSession();
-    const initialSessions = sessions.length === 0 ? [firstSession, createDemoSession()] : sessions;
-    if (sessions.length === 0) {
+    const initialSessions = ensureDemoSession(sessions.length === 0 ? [firstSession] : sessions);
+    if (sessions.length === 0 || initialSessions.length !== sessions.length) {
         saveSessions(initialSessions);
     }
     const state = {

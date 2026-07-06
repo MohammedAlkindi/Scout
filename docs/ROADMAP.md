@@ -6,17 +6,18 @@ trust, polish, and repeatability.
 ## Now
 
 - Keep the map-first recommendation view stable across desktop and mobile.
-- Expand E2E coverage for settings, conditions, preferences, and empty states.
-- Add visual regression screenshots for the main result page.
-- Improve fallback imagery without pretending a generated preview is a real
-  place photo.
-- Add deployment smoke checks after production deploys.
+- Run deployment smoke checks after production deploys.
+- Keep the bundled Muscat demo flow healthy as the guaranteed walkthrough path.
+- Treat structured recovery panels, trust badges, and report export as part of
+  the public demo surface.
 
 ## Next
 
 - Add provider abstraction for optional richer place imagery.
-- Add observability for upstream latency, rate limits, empty searches, and error
-  rates.
+- Add visual regression screenshots for the main result page.
+- Expand E2E coverage for settings, conditions, preferences, and empty states.
+- Add durable observability for upstream latency, rate limits, empty searches,
+  and error rates.
 - Add structured recommendation telemetry that does not collect sensitive user
   location history by default.
 - Add a shareable read-only scout result URL.
@@ -37,4 +38,3 @@ trust, polish, and repeatability.
 - The app should feel like a field tool, not a generic AI chat wrapper.
 - The default version should run without API keys.
 - The UI should make the best next action obvious.
-

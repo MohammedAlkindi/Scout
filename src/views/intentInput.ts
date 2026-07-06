@@ -3,6 +3,7 @@ import type { Session, Settings, ShotType } from "../types.js";
 
 export interface IntentInputHandlers {
   onSubmit: (intent: string, shotType: ShotType | undefined) => Promise<void>;
+  onUseDemo: () => void;
 }
 
 interface ActivityOption {
@@ -216,6 +217,7 @@ export function renderIntentInput(
   let selectedActivity = inferInitialActivity(session, settings);
   let isSubmitting = false;
   const isNewScout = session.results === null;
+  let activeRecovery: HTMLElement | null = null;
 
   const form = document.createElement("form");
   form.className = `composer${isNewScout ? " composer--command" : ""}`;
@@ -268,6 +270,66 @@ export function renderIntentInput(
 
   controls.append(selectedSummary, submit);
   form.append(fields, controls);
+
+  function clearRecovery(): void {
+    if (activeRecovery !== null) {
+      activeRecovery.remove();
+      activeRecovery = null;
+    }
+  }
+
+  function renderRecovery(error: unknown): void {
+    clearRecovery();
+    const recovery = document.createElement("section");
+    recovery.className = "recovery-panel";
+    recovery.setAttribute("role", "alert");
+
+    const title = document.createElement("h2");
+    title.textContent = "Scout could not complete the live search.";
+
+    const message = document.createElement("p");
+    message.textContent =
+      error instanceof ApiRequestError
+        ? error.message
+        : "Map or weather data did not respond in time. Scout kept the raw provider error hidden.";
+
+    const hint = document.createElement("p");
+    hint.className = "recovery-panel__hint";
+    hint.textContent =
+      error instanceof ApiRequestError && error.recoveryHint !== null
+        ? error.recoveryHint
+        : "Retry once, or open the bundled Muscat demo to verify the product flow.";
+
+    const meta = document.createElement("p");
+    meta.className = "data recovery-panel__meta";
+    if (error instanceof ApiRequestError) {
+      meta.textContent = `status ${error.status || "offline"} / ${error.code} / ${
+        error.retryable ? "retryable" : "check input"
+      }`;
+    } else {
+      meta.textContent = "status unknown / client_error / retryable";
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "recovery-panel__actions";
+    const retry = document.createElement("button");
+    retry.className = "button button--primary";
+    retry.type = "button";
+    retry.textContent = "Retry live scout";
+    retry.addEventListener("click", () => {
+      form.requestSubmit();
+    });
+    const demo = document.createElement("button");
+    demo.className = "button";
+    demo.type = "button";
+    demo.textContent = "Open Muscat demo";
+    demo.addEventListener("click", handlers.onUseDemo);
+    actions.append(retry, demo);
+
+    recovery.append(title, message, hint, meta, actions);
+    activeRecovery = recovery;
+    root.appendChild(recovery);
+  }
 
   function matchesActivity(activity: ActivityOption, query: string): boolean {
     if (!query) {
@@ -352,8 +414,10 @@ export function renderIntentInput(
 
     isSubmitting = true;
     submit.disabled = true;
+    form.setAttribute("aria-busy", "true");
+    clearRecovery();
     status.className = "status";
-    status.textContent = "Checking location data, light, and weather.";
+    status.textContent = "Checking map candidates, light windows, live weather, and access signals.";
     const skeleton = renderSkeleton();
     root.appendChild(skeleton);
 
@@ -362,12 +426,11 @@ export function renderIntentInput(
       .catch((error: unknown) => {
         isSubmitting = false;
         submit.disabled = false;
+        form.setAttribute("aria-busy", "false");
         skeleton.remove();
         status.className = "status status--error";
-        status.textContent =
-          error instanceof ApiRequestError
-            ? error.message
-            : "Could not reach location data. Check your connection and try again.";
+        status.textContent = "Live scout stopped before recommendations were ready.";
+        renderRecovery(error);
       });
   });
 }

@@ -7,10 +7,13 @@
  * text-first, single-screen-result UI needs them directly.
  */
 export class ApiRequestError extends Error {
-    constructor(message, status) {
+    constructor(message, status, code = "network_error", retryable = true, recoveryHint = null) {
         super(message);
         this.name = "ApiRequestError";
         this.status = status;
+        this.code = code;
+        this.retryable = retryable;
+        this.recoveryHint = recoveryHint;
     }
 }
 function isApiErrorResponse(value) {
@@ -19,17 +22,17 @@ function isApiErrorResponse(value) {
         "error" in value &&
         typeof value.error === "string");
 }
-async function extractErrorMessage(response) {
+async function extractErrorResponse(response) {
     try {
         const body = await response.json();
         if (isApiErrorResponse(body)) {
-            return body.error;
+            return body;
         }
     }
     catch {
         // Response body wasn't valid JSON; fall through to the generic message.
     }
-    return "Something went wrong reaching Scout. Please try again.";
+    return { error: "Something went wrong reaching Scout. Please try again." };
 }
 export async function fetchRecommendation(request) {
     let response;
@@ -41,10 +44,11 @@ export async function fetchRecommendation(request) {
         });
     }
     catch {
-        throw new ApiRequestError("Could not reach Scout. Check your connection and try again.", 0);
+        throw new ApiRequestError("Could not reach Scout. Check your connection and try again.", 0, "network_error", true, "Retry once. If you are demoing, open the bundled Muscat scout from the recovery action.");
     }
     if (!response.ok) {
-        throw new ApiRequestError(await extractErrorMessage(response), response.status);
+        const error = await extractErrorResponse(response);
+        throw new ApiRequestError(error.error, response.status, error.code ?? "api_error", error.retryable ?? true, error.recovery_hint ?? null);
     }
     // Trust boundary: server/api.py's response_model guarantees this shape;
     // we don't re-validate every field client-side (no schema-validation

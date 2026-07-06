@@ -127,3 +127,5 @@ class RecommendationResponse(BaseModel):
     shot_type: ShotType
     generated_at: datetime
     recommendations: list[RecommendationItem]
+    demo_mode: bool = False
+    source_note: Optional[str] = None

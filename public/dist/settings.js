@@ -1,4 +1,4 @@
-const ACTIVITY_TYPES = ["landscape", "street", "wildlife", "hiking", "cycling", "other"];
+const ACTIVITY_TYPES = ["landscape", "portrait", "urban", "wildlife", "hiking", "astro"];
 function applyTheme(theme) {
     if (theme === "system") {
         document.documentElement.removeAttribute("data-theme");

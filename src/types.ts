@@ -58,6 +58,8 @@ export interface RecommendationResponse {
   shot_type: ShotType;
   generated_at: IsoDateTimeString;
   recommendations: RecommendationItem[];
+  demo_mode?: boolean;
+  source_note?: string | null;
 }
 
 export interface RecommendationRequest {
@@ -71,6 +73,9 @@ export interface RecommendationRequest {
 /** Shape of every error response body the backend returns (never a raw exception). */
 export interface ApiErrorResponse {
   error: string;
+  code?: string;
+  retryable?: boolean;
+  recovery_hint?: string;
 }
 
 export interface Coordinates {

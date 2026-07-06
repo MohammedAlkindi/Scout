@@ -389,7 +389,173 @@ function buildCaveats(item: RecommendationItem): HTMLElement | null {
   return details;
 }
 
-function buildCard(item: RecommendationItem, index: number, settings: Settings): HTMLElement {
+interface TrustBadge {
+  label: string;
+  detail: string;
+  tone: "live" | "estimated" | "fallback";
+}
+
+function buildTrustBadges(item: RecommendationItem, response: RecommendationResponse): HTMLElement {
+  const badges: TrustBadge[] = [
+    response.demo_mode === true
+      ? { label: "Demo plan", detail: "Bundled fallback", tone: "fallback" }
+      : { label: "Live weather", detail: "Open-Meteo", tone: "live" },
+    { label: "Map data", detail: "OpenStreetMap", tone: "live" },
+    { label: "Crowd estimate", detail: "Public tags", tone: "estimated" },
+    {
+      label: typeof item.image_url === "string" && item.image_url.trim() ? "Place image" : "Image fallback",
+      detail: typeof item.image_url === "string" && item.image_url.trim() ? "OSM/Wikimedia" : "Generated preview",
+      tone: typeof item.image_url === "string" && item.image_url.trim() ? "live" : "fallback",
+    },
+    { label: "Access estimate", detail: "Verify locally", tone: "estimated" },
+  ];
+
+  const list = document.createElement("ul");
+  list.className = "trust-badges";
+  for (const badge of badges) {
+    const row = document.createElement("li");
+    row.className = `trust-badge trust-badge--${badge.tone}`;
+    const label = document.createElement("span");
+    label.textContent = badge.label;
+    const detail = document.createElement("small");
+    detail.textContent = badge.detail;
+    row.append(label, detail);
+    list.appendChild(row);
+  }
+  return list;
+}
+
+function reportFilename(item: RecommendationItem): string {
+  return `${item.location_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "scout"}-report.md`;
+}
+
+function buildReportText(item: RecommendationItem, response: RecommendationResponse, settings: Settings): string {
+  const reasons = safeStringList(item.reason_tags as unknown);
+  const caveats = safeStringList(item.caveats as unknown);
+  const sourceNote =
+    response.source_note ??
+    (response.demo_mode === true
+      ? "Bundled demo plan."
+      : "Live recommendation from OpenStreetMap, Open-Meteo, and Scout scoring.");
+  const mapUrl = `https://www.openstreetmap.org/?mlat=${item.latitude}&mlon=${item.longitude}#map=15/${item.latitude}/${item.longitude}`;
+  const directionsUrl = `https://www.openstreetmap.org/directions?to=${item.latitude}%2C${item.longitude}`;
+
+  return [
+    `# Scout Report: ${item.location_name}`,
+    "",
+    `Activity: ${response.intent}`,
+    `Score: ${item.score}/100 (${confidenceLabel(item)} confidence)`,
+    `Best window: ${formatTimeWindow(item.best_window.start_utc, item.best_window.end_utc, settings)}`,
+    `Light: ${formatLightPhase(item.light_phase)}`,
+    `Distance: ${formatDistance(item.distance_miles, settings)}`,
+    `Coordinates: ${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`,
+    "",
+    "## Conditions",
+    item.conditions_summary,
+    "",
+    "## Why This Place",
+    item.advice,
+    "",
+    reasons.length > 0 ? reasons.map((reason) => `- ${reason}`).join("\n") : "- No reason tags available.",
+    "",
+    "## Verify Before Leaving",
+    caveats.length > 0 ? caveats.map((caveat) => `- ${caveat}`).join("\n") : "- Verify access and conditions locally.",
+    "",
+    "## Links",
+    `- Map: ${mapUrl}`,
+    `- Directions: ${directionsUrl}`,
+    "",
+    "## Source Note",
+    sourceNote,
+  ].join("\n");
+}
+
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard !== undefined && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
+function downloadText(filename: string, text: string): void {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function buildReportActions(item: RecommendationItem, response: RecommendationResponse, settings: Settings): HTMLElement {
+  const actions = document.createElement("div");
+  actions.className = "report-actions";
+  const status = document.createElement("span");
+  status.className = "report-actions__status";
+  status.setAttribute("role", "status");
+
+  const copy = document.createElement("button");
+  copy.className = "button";
+  copy.type = "button";
+  copy.textContent = "Copy report";
+  copy.addEventListener("click", () => {
+    const report = buildReportText(item, response, settings);
+    void copyText(report)
+      .then((copied) => {
+        status.textContent = copied ? "Copied" : "Copy unavailable. Download instead.";
+      })
+      .catch(() => {
+        status.textContent = "Copy unavailable. Download instead.";
+      });
+  });
+
+  const download = document.createElement("button");
+  download.className = "button";
+  download.type = "button";
+  download.textContent = "Download";
+  download.addEventListener("click", () => {
+    downloadText(reportFilename(item), buildReportText(item, response, settings));
+    status.textContent = "Downloaded";
+  });
+
+  actions.append(copy, download, status);
+  return actions;
+}
+
+function buildSourceNotice(response: RecommendationResponse): HTMLElement | null {
+  if (typeof response.source_note !== "string" || !response.source_note.trim()) {
+    return null;
+  }
+  const notice = document.createElement("section");
+  notice.className = "source-notice";
+  const label = document.createElement("p");
+  label.className = "label";
+  label.textContent = response.demo_mode === true ? "Demo fallback" : "Source status";
+  const body = document.createElement("p");
+  body.textContent = response.source_note;
+  notice.append(label, body);
+  return notice;
+}
+
+function buildCard(
+  item: RecommendationItem,
+  index: number,
+  response: RecommendationResponse,
+  settings: Settings,
+): HTMLElement {
   const card = document.createElement("article");
   card.className = `result-card result-card--${item.light_phase}${index === 0 ? " result-card--primary" : ""}`;
   card.id = `recommendation-${item.rank}`;
@@ -426,6 +592,7 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
   );
 
   const reasonChips = buildReasonChips(item);
+  const trustBadges = buildTrustBadges(item, response);
   const breakdown = buildBreakdown(item);
   const summary = document.createElement("p");
   summary.className = "result-card__summary";
@@ -434,11 +601,13 @@ function buildCard(item: RecommendationItem, index: number, settings: Settings):
   const advice = document.createElement("p");
   advice.textContent = item.advice;
 
-  card.append(top, media, grid);
+  const reportActions = buildReportActions(item, response, settings);
+
+  card.append(top, media, grid, trustBadges);
   if (reasonChips !== null) {
     card.appendChild(reasonChips);
   }
-  card.append(breakdown, summary, advice);
+  card.append(breakdown, summary, advice, reportActions);
 
   if (item.permit_required) {
     const permit = document.createElement("p");
@@ -469,6 +638,10 @@ export function renderResults(root: HTMLElement, response: RecommendationRespons
   }
 
   root.appendChild(buildOverviewMap(response, settings));
+  const sourceNotice = buildSourceNotice(response);
+  if (sourceNotice !== null) {
+    root.appendChild(sourceNotice);
+  }
 
   const top = response.recommendations[0];
   if (top !== undefined) {
@@ -489,7 +662,7 @@ export function renderResults(root: HTMLElement, response: RecommendationRespons
   list.setAttribute("aria-label", "Scout recommendations");
 
   for (const [index, item] of response.recommendations.entries()) {
-    list.appendChild(buildCard(item, index, settings));
+    list.appendChild(buildCard(item, index, response, settings));
   }
 
   root.appendChild(list);

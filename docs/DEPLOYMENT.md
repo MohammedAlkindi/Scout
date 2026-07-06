@@ -90,6 +90,17 @@ curl https://scoutphotography.vercel.app/api/health
 curl https://scoutphotography.vercel.app/index.html
 ```
 
+Demo-day smoke check:
+
+1. Open `https://scoutphotography.vercel.app`.
+2. Confirm `Try Muscat sunset scout` appears in the sidebar.
+3. Open the demo session and verify the map, ranked cards, trust badges, and
+   report export buttons render.
+4. Start a live scout with manual coordinates near Muscat
+   (`23.5793, 58.4025`) and activity `Coastal sunset`.
+5. If a provider is slow, the Muscat demo-style request should return
+   `demo_mode: true` instead of leaving the user with a dead end.
+
 Check recent server errors:
 
 ```bash
@@ -128,3 +139,12 @@ Check recent function logs with:
 ```bash
 npx vercel logs scoutphotography.vercel.app --since 15m --limit 100 --expand
 ```
+
+For the bundled Muscat sunset demo, Scout should fall back to a static demo
+plan if the live provider fails. For all other searches, the frontend should
+show a structured recovery panel with retry and demo actions.
+
+Demo session is missing
+: Clear local storage or use the New Scout flow once. The frontend now ensures
+the bundled `Try Muscat sunset scout` session exists on app startup without
+creating duplicates.

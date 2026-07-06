@@ -21,7 +21,10 @@ All expected errors return a small JSON object:
 
 ```json
 {
-  "error": "Too many requests. Please slow down and try again shortly."
+  "error": "Too many requests. Please slow down and try again shortly.",
+  "code": "rate_limited",
+  "retryable": true,
+  "recovery_hint": "Wait a minute, then retry. Scout protects the free map providers from repeated broad searches."
 }
 ```
 
@@ -34,6 +37,9 @@ Common operational errors:
 | `404` | `No named locations found matching this description in the given radius.` | The provider responded, but Scout could not find named places for the intent/radius. |
 | `429` | `Location provider is rate-limited. Try a more specific intent or smaller search radius.` | OpenStreetMap Overpass throttled the request. This is more likely for broad intents in dense cities. |
 | `502` | `Location search is temporarily unavailable. Try a more specific intent or smaller search radius.` | The location provider timed out, returned an unexpected response, or failed. |
+
+The browser uses `code`, `retryable`, and `recovery_hint` to show a recovery
+panel with retry and demo actions instead of exposing provider jargon.
 
 ## `GET /api/health`
 
@@ -169,6 +175,7 @@ Response includes:
 - origin coordinates
 - resolved shot type
 - generation timestamp
+- `demo_mode` and `source_note` when Scout used its bundled fallback demo
 - ranked recommendations
 - best window per recommendation
 - light phase
@@ -178,6 +185,17 @@ Response includes:
 - caveats
 - map coordinates
 - image URL and attribution when public map metadata provides it
+
+## Demo Fallback
+
+Scout includes a narrow, intentional fallback for the bundled
+`Try Muscat sunset scout` flow. If a Muscat-area landscape/coastal sunset
+request cannot reach live location or weather providers, orchestration returns
+static Muscat place candidates with freshly calculated light windows and
+`demo_mode: true`.
+
+This fallback is not used for general user searches. Non-demo provider failures
+still return structured errors so the UI can offer retry and recovery actions.
 
 ## Enumerations
 
@@ -210,5 +228,6 @@ high, medium, low
 - Weather is sourced from Open-Meteo.
 - Places are sourced from OpenStreetMap/Overpass.
 - Crowd, permit, access, and media fields are inferred from public map tags.
+- Result cards expose trust badges for live, estimated, and fallback signals.
 - Clients should treat caveats as part of the recommendation, not secondary
   metadata.

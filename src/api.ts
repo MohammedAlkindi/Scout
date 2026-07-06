@@ -11,11 +11,17 @@ import type { ApiErrorResponse, RecommendationRequest, RecommendationResponse } 
 
 export class ApiRequestError extends Error {
   readonly status: number;
+  readonly code: string;
+  readonly retryable: boolean;
+  readonly recoveryHint: string | null;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code = "network_error", retryable = true, recoveryHint: string | null = null) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
+    this.code = code;
+    this.retryable = retryable;
+    this.recoveryHint = recoveryHint;
   }
 }
 
@@ -28,16 +34,16 @@ function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
   );
 }
 
-async function extractErrorMessage(response: Response): Promise<string> {
+async function extractErrorResponse(response: Response): Promise<ApiErrorResponse> {
   try {
     const body: unknown = await response.json();
     if (isApiErrorResponse(body)) {
-      return body.error;
+      return body;
     }
   } catch {
     // Response body wasn't valid JSON; fall through to the generic message.
   }
-  return "Something went wrong reaching Scout. Please try again.";
+  return { error: "Something went wrong reaching Scout. Please try again." };
 }
 
 export async function fetchRecommendation(request: RecommendationRequest): Promise<RecommendationResponse> {
@@ -49,11 +55,24 @@ export async function fetchRecommendation(request: RecommendationRequest): Promi
       body: JSON.stringify(request),
     });
   } catch {
-    throw new ApiRequestError("Could not reach Scout. Check your connection and try again.", 0);
+    throw new ApiRequestError(
+      "Could not reach Scout. Check your connection and try again.",
+      0,
+      "network_error",
+      true,
+      "Retry once. If you are demoing, open the bundled Muscat scout from the recovery action.",
+    );
   }
 
   if (!response.ok) {
-    throw new ApiRequestError(await extractErrorMessage(response), response.status);
+    const error = await extractErrorResponse(response);
+    throw new ApiRequestError(
+      error.error,
+      response.status,
+      error.code ?? "api_error",
+      error.retryable ?? true,
+      error.recovery_hint ?? null,
+    );
   }
 
   // Trust boundary: server/api.py's response_model guarantees this shape;

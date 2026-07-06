@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+from time import perf_counter
 from datetime import date as date_type, datetime
 from pathlib import Path
 from typing import Optional
@@ -79,11 +80,42 @@ _ERROR_STATUS: dict[type, int] = {
     UpstreamServiceError: 502,
 }
 
+_ERROR_META: dict[type, dict[str, object]] = {
+    InvalidRequestError: {
+        "code": "invalid_request",
+        "retryable": False,
+        "recovery_hint": "Check the coordinates, activity, and radius before trying again.",
+    },
+    NoCandidatesFoundError: {
+        "code": "no_candidates",
+        "retryable": True,
+        "recovery_hint": "Try a wider radius or choose a different activity such as coastal sunset or quiet portrait.",
+    },
+    RateLimitedError: {
+        "code": "rate_limited",
+        "retryable": True,
+        "recovery_hint": "Wait a minute, then retry. Scout protects the free map providers from repeated broad searches.",
+    },
+    UpstreamServiceError: {
+        "code": "upstream_unavailable",
+        "retryable": True,
+        "recovery_hint": "Retry once. If it keeps failing, use the bundled Muscat demo scout for a guaranteed product walkthrough.",
+    },
+}
+
 
 @app.exception_handler(ScoutError)
 async def scout_error_handler(request: Request, exc: ScoutError) -> JSONResponse:
     status_code = _ERROR_STATUS.get(type(exc), 500)
-    return JSONResponse(status_code=status_code, content={"error": exc.message})
+    meta = _ERROR_META.get(
+        type(exc),
+        {
+            "code": "scout_error",
+            "retryable": True,
+            "recovery_hint": "Try again. Scout did not expose raw provider errors to the client.",
+        },
+    )
+    return JSONResponse(status_code=status_code, content={"error": exc.message, **meta})
 
 
 @app.exception_handler(Exception)
@@ -151,9 +183,21 @@ class RecommendationRequest(BaseModel):
 
 @app.post("/api/recommendation", response_model=RecommendationResponse, dependencies=[_rate_limited])
 async def recommendation_route(body: RecommendationRequest) -> RecommendationResponse:
-    return await orchestration.build_recommendation(
+    started = perf_counter()
+    response = await orchestration.build_recommendation(
         body.latitude, body.longitude, body.intent, body.radius_miles, body.shot_type
     )
+    elapsed_ms = round((perf_counter() - started) * 1000)
+    logger.info(
+        "recommendation_complete lat=%.3f lng=%.3f shot_type=%s count=%s demo_mode=%s elapsed_ms=%s",
+        body.latitude,
+        body.longitude,
+        response.shot_type,
+        len(response.recommendations),
+        response.demo_mode,
+        elapsed_ms,
+    )
+    return response
 
 
 _PUBLIC_DIR = Path(os.environ.get("SCOUT_PUBLIC_DIR", Path(__file__).resolve().parent.parent / "public"))

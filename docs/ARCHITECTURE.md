@@ -55,7 +55,8 @@ It should not duplicate recommendation logic.
 
 `server/orchestration.py`
 : Coordinates validation, caching, service calls, scoring, ranking, response
-shaping, confidence labels, reason tags, and caveats.
+shaping, confidence labels, reason tags, caveats, and the narrow bundled demo
+fallback for the Muscat sample flow.
 
 `server/services/golden_hour.py`
 : Pure solar-position math. No network calls, no cache, deterministic tests.
@@ -114,6 +115,11 @@ flow.
    map coordinates, and image metadata when available.
 9. The frontend renders a map-first overview and recommendation cards.
 
+If the request matches the bundled Muscat sunset demo and a live provider fails,
+orchestration returns a `demo_mode` response with static Muscat place candidates
+and freshly calculated light windows. General user searches do not use this
+fallback; they surface structured, recoverable errors.
+
 ## Caching And Rate Limiting
 
 Scout uses in-process TTL caches:
@@ -150,11 +156,20 @@ network failures, malformed provider payloads, and empty result sets into
 Scout-specific errors. The HTTP layer maps those to small JSON responses:
 
 ```json
-{ "error": "Location search is temporarily unavailable." }
+{
+  "error": "Location search is temporarily unavailable.",
+  "code": "upstream_unavailable",
+  "retryable": true,
+  "recovery_hint": "Retry once. If it keeps failing, use the bundled Muscat demo scout for a guaranteed product walkthrough."
+}
 ```
 
 Unexpected exceptions are logged server-side and returned as a generic user-safe
 message.
+
+The recommendation route logs rounded coordinates, shot type, result count,
+demo-mode usage, and elapsed time. It does not log raw provider payloads or
+credentials.
 
 ## Extension Points
 
@@ -167,4 +182,3 @@ Good next places to extend the architecture:
 - Add account-backed saved scouts behind a storage layer without changing the
   scoring model.
 - Add visual regression testing around the map-first result page.
-

@@ -1,6 +1,6 @@
 import type { Settings } from "./types.js";
 
-const ACTIVITY_TYPES = ["landscape", "street", "wildlife", "hiking", "cycling", "other"] as const;
+const ACTIVITY_TYPES = ["landscape", "portrait", "urban", "wildlife", "hiking", "astro"] as const;
 
 export interface SettingsPanelOptions {
   panel: HTMLElement;

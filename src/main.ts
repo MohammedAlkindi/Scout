@@ -3,6 +3,7 @@ import { applySettings, initSettingsPanel } from "./settings.js";
 import {
   createSession,
   createDemoSession,
+  DEMO_SESSION_NAME,
   deleteSession,
   duplicateSession,
   loadSessions,
@@ -89,6 +90,17 @@ function isUntouchedDraft(session: Session): boolean {
   return !sessionHasLocation(session) && session.intent.trim() === "" && session.results === null;
 }
 
+function isDemoSession(session: Session): boolean {
+  return session.name === DEMO_SESSION_NAME && session.location.label === "Muscat, Oman";
+}
+
+function ensureDemoSession(sessions: Session[]): Session[] {
+  if (sessions.some(isDemoSession)) {
+    return sessions;
+  }
+  return [...sessions, createDemoSession()];
+}
+
 function defaultSessionName(location: SessionLocation, intent: string): string {
   if (intent.trim()) {
     return intent.trim().slice(0, 42);
@@ -99,6 +111,20 @@ function defaultSessionName(location: SessionLocation, intent: string): string {
 function updateSession(state: AppState, session: Session): void {
   state.sessions = upsertSession(session);
   state.activeSessionId = session.id;
+}
+
+function openDemoSession(state: AppState): void {
+  const existingDemo = state.sessions.find(isDemoSession);
+  if (existingDemo !== undefined) {
+    state.activeSessionId = existingDemo.id;
+    saveSessions(state.sessions);
+    return;
+  }
+
+  const demo = createDemoSession();
+  state.sessions = [...state.sessions, demo];
+  state.activeSessionId = demo.id;
+  saveSessions(state.sessions);
 }
 
 function setActiveNav(elements: AppElements, state: AppState, activeNav: ActiveNav): void {
@@ -249,6 +275,11 @@ function renderActiveSession(elements: AppElements, state: AppState, renderApp: 
       updateSession(state, nextSession);
       renderApp();
     },
+    onUseDemo: () => {
+      openDemoSession(state);
+      setActiveNav(elements, state, "sessions");
+      renderApp();
+    },
   });
 
   if (session.results !== null) {
@@ -330,8 +361,8 @@ function main(): void {
   const elements = getElements();
   const sessions = loadSessions();
   const firstSession = sessions[0] ?? createSession();
-  const initialSessions = sessions.length === 0 ? [firstSession, createDemoSession()] : sessions;
-  if (sessions.length === 0) {
+  const initialSessions = ensureDemoSession(sessions.length === 0 ? [firstSession] : sessions);
+  if (sessions.length === 0 || initialSessions.length !== sessions.length) {
     saveSessions(initialSessions);
   }
 

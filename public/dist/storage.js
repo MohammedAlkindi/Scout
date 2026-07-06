@@ -1,9 +1,10 @@
 const SESSIONS_KEY = "scout:sessions";
 const SETTINGS_KEY = "scout:settings";
+export const DEMO_SESSION_NAME = "Try Muscat sunset scout";
 export const DEFAULT_SETTINGS = {
     units: "imperial",
     radiusMiles: 15,
-    activityTypes: ["landscape", "wildlife", "hiking"],
+    activityTypes: ["landscape", "portrait", "wildlife"],
     timeFormat: "12h",
     theme: "system",
 };
@@ -75,13 +76,15 @@ export function createDemoSession() {
         createdAt: generatedAt,
         location: { lat: 23.5793, lng: 58.4025, label: "Muscat, Oman" },
         intent: "sunset landscape near the coast",
-        name: "Try Muscat sunset scout",
+        name: DEMO_SESSION_NAME,
         results: {
             latitude: 23.5793,
             longitude: 58.4025,
             intent: "sunset landscape near the coast",
             shot_type: "landscape",
             generated_at: generatedAt,
+            demo_mode: true,
+            source_note: "Bundled demo plan using static Muscat places and fresh relative light windows.",
             recommendations: [
                 {
                     rank: 1,
@@ -120,6 +123,30 @@ export function createDemoSession() {
                     caveats: ["Crowd and access signals are inferred from public map tags; verify locally."],
                     conditions_summary: "Warm light, accessible terrain, and moderate crowd risk.",
                     advice: "Qurum Natural Park: good golden-hour backup with varied foregrounds and easy access.",
+                    permit_required: false,
+                    permit_notes: null,
+                    image_url: null,
+                    image_attribution: null,
+                },
+                {
+                    rank: 3,
+                    location_name: "Mutrah Corniche",
+                    latitude: 23.6217,
+                    longitude: 58.5651,
+                    distance_miles: 10.6,
+                    terrain_type: "waterfront",
+                    best_window: { start_utc: windowStart, end_utc: windowEnd },
+                    light_phase: "golden_hour",
+                    score: 84,
+                    score_breakdown: { light: 100, weather: 86, crowd: 60, access: 78 },
+                    confidence: "medium",
+                    reason_tags: ["Golden-hour timing", "Clear visibility", "Waterfront foreground"],
+                    caveats: [
+                        "Demo fallback uses bundled place data for a reliable walkthrough.",
+                        "Crowd and parking can vary around Mutrah; verify locally before leaving.",
+                    ],
+                    conditions_summary: "Warm reflected light, clear visibility, and higher evening crowd risk.",
+                    advice: "Mutrah Corniche: strong fallback for waterfront leading lines if the nearby coast is crowded.",
                     permit_required: false,
                     permit_notes: null,
                     image_url: null,

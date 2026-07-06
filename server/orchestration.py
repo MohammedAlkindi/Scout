@@ -16,13 +16,15 @@ vary enough to justify one Open-Meteo call per candidate.
 
 from __future__ import annotations
 
+import logging
+import math
 from dataclasses import dataclass
 from datetime import date as date_type, datetime, timedelta, timezone
 from typing import Optional
 
 from server import config
 from server.cache import TTLCache
-from server.errors import InvalidRequestError, UpstreamServiceError
+from server.errors import InvalidRequestError, NoCandidatesFoundError, RateLimitedError, UpstreamServiceError
 from server.schemas import (
     ConditionsResponse,
     ForecastHourSchema,
@@ -53,6 +55,8 @@ from server.services.scorer import (
 )
 from server.services.scorer import score_window as compute_score
 from server.services.weather import ConditionsResult, ForecastHour
+
+logger = logging.getLogger("scout.orchestration")
 
 _conditions_cache: TTLCache[ConditionsResult] = TTLCache()
 _locations_cache: TTLCache[list[LocationCandidate]] = TTLCache()
@@ -293,6 +297,34 @@ _SHOT_TYPE_KEYWORDS: dict[ShotType, list[str]] = {
     ShotType.HIKING: ["hike", "hiking", "backpack", "trail run"],
 }
 
+_DEMO_LATITUDE = 23.5793
+_DEMO_LONGITUDE = 58.4025
+_DEMO_RADIUS_DEGREES = 0.25
+_DEMO_TRIGGER_WORDS = ("sunset", "coast", "coastal", "landscape", "scenic", "waterfront")
+_DEMO_SOURCE_NOTE = (
+    "Live providers were unavailable, so Scout loaded its bundled Muscat demo plan with static places and "
+    "freshly calculated light windows."
+)
+
+
+def _distance_miles(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    earth_radius_miles = 3958.8
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lng2 - lng1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    return earth_radius_miles * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _is_muscat_demo_request(latitude: float, longitude: float, intent: str, shot_type: Optional[ShotType]) -> bool:
+    if abs(latitude - _DEMO_LATITUDE) > _DEMO_RADIUS_DEGREES or abs(longitude - _DEMO_LONGITUDE) > _DEMO_RADIUS_DEGREES:
+        return False
+    if shot_type not in (None, ShotType.LANDSCAPE):
+        return False
+    text = intent.lower()
+    return any(word in text for word in _DEMO_TRIGGER_WORDS)
+
 
 def _infer_shot_type(intent: str) -> ShotType:
     text = intent.lower()
@@ -393,6 +425,120 @@ class _RankedLocation:
     result: ScoreResult
 
 
+def _demo_candidates(origin_latitude: float, origin_longitude: float) -> list[LocationCandidate]:
+    demo_places: list[tuple[str, float, float, str, CrowdLevel, float]] = [
+        ("Azaiba Beach Park", 23.6019, 58.3912, "urban park", CrowdLevel.LOW, 0.15),
+        ("Qurum Natural Park", 23.6146, 58.4892, "urban park", CrowdLevel.MEDIUM, 0.2),
+        ("Mutrah Corniche", 23.6217, 58.5651, "waterfront", CrowdLevel.MEDIUM, 0.18),
+    ]
+    return [
+        LocationCandidate(
+            name=name,
+            latitude=latitude,
+            longitude=longitude,
+            distance_miles=round(_distance_miles(origin_latitude, origin_longitude, latitude, longitude), 2),
+            terrain_type=terrain_type,
+            accessibility_notes="demo fallback; verify current local access",
+            accessibility_difficulty=accessibility_difficulty,
+            permit_required=False,
+            permit_notes=None,
+            crowd_level=crowd_level,
+            osm_id=0,
+            image_url=None,
+            image_attribution=None,
+        )
+        for name, latitude, longitude, terrain_type, crowd_level, accessibility_difficulty in demo_places
+    ]
+
+
+def _demo_window_context(latitude: float, longitude: float, now: datetime) -> tuple[GHTimeWindow, WindowLightContext]:
+    upcoming = _upcoming_light_windows(latitude, longitude, now)
+    preferred = next((pair for pair in upcoming if pair[1].phase == LightPhase.GOLDEN_HOUR), None)
+    if preferred is not None:
+        return preferred
+
+    fallback_start = now + timedelta(hours=1)
+    fallback_end = fallback_start + timedelta(minutes=35)
+    return GHTimeWindow(start=fallback_start, end=fallback_end), WindowLightContext(phase=LightPhase.GOLDEN_HOUR)
+
+
+def _build_demo_recommendation(
+    latitude: float,
+    longitude: float,
+    intent: str,
+    resolved_shot_type: ShotType,
+    now: datetime,
+) -> RecommendationResponse:
+    window, light = _demo_window_context(latitude, longitude, now)
+    weather = WeatherSnapshot(
+        cloud_cover_pct=22.0,
+        wind_speed_mph=6.0,
+        visibility_miles=14.0,
+        precipitation_probability_pct=0.0,
+        temperature_f=84.0,
+    )
+
+    ranked: list[_RankedLocation] = []
+    for candidate in _demo_candidates(latitude, longitude):
+        location = LocationConditions(
+            name=candidate.name,
+            crowd_level=candidate.crowd_level,
+            permit_required=candidate.permit_required,
+            accessibility_difficulty=candidate.accessibility_difficulty,
+            distance_miles=candidate.distance_miles,
+        )
+        result = compute_score(location, light, weather, resolved_shot_type)
+        ranked.append(
+            _RankedLocation(candidate=candidate, window=window, light=light, weather=weather, result=result)
+        )
+
+    ranked.sort(key=lambda item: item.result.score, reverse=True)
+    items = [
+        RecommendationItem(
+            rank=rank,
+            location_name=item.candidate.name,
+            latitude=item.candidate.latitude,
+            longitude=item.candidate.longitude,
+            distance_miles=item.candidate.distance_miles,
+            terrain_type=item.candidate.terrain_type,
+            best_window=TimeWindowSchema(start_utc=item.window.start, end_utc=item.window.end),
+            light_phase=item.light.phase,
+            score=item.result.score,
+            score_breakdown=ScoreBreakdownSchema(
+                light=item.result.breakdown.light,
+                weather=item.result.breakdown.weather,
+                crowd=item.result.breakdown.crowd,
+                access=item.result.breakdown.access,
+            ),
+            confidence=_recommendation_confidence(item.candidate, item.weather, item.result),
+            reason_tags=_reason_tags(item.candidate, item.light, item.weather, item.result),
+            caveats=[
+                "Demo fallback used bundled Muscat place data because live providers were unavailable.",
+                "Crowd and access signals are estimates; verify locally before leaving.",
+                "No verified place photo was found in OSM or Wikimedia metadata.",
+            ],
+            conditions_summary=_conditions_summary(item.weather),
+            advice=item.result.explanation,
+            permit_required=item.candidate.permit_required,
+            permit_notes=item.candidate.permit_notes,
+            image_url=item.candidate.image_url,
+            image_attribution=item.candidate.image_attribution,
+        )
+        for rank, item in enumerate(ranked[:MAX_RECOMMENDATIONS], start=1)
+    ]
+
+    return RecommendationResponse(
+        latitude=latitude,
+        longitude=longitude,
+        intent=intent,
+        shot_type=resolved_shot_type,
+        generated_at=now,
+        recommendations=items,
+        demo_mode=True,
+        source_note=_DEMO_SOURCE_NOTE,
+    )
+
+
 async def build_recommendation(
     latitude: float,
     longitude: float,
@@ -410,8 +556,20 @@ async def build_recommendation(
     resolved_shot_type = shot_type or _infer_shot_type(intent)
     now = datetime.now(timezone.utc)
 
-    candidates = await _find_locations_cached(latitude, longitude, radius_miles, intent, DEFAULT_LOCATION_LIMIT)
-    conditions = await _fetch_conditions_cached(latitude, longitude)
+    try:
+        candidates = await _find_locations_cached(latitude, longitude, radius_miles, intent, DEFAULT_LOCATION_LIMIT)
+        conditions = await _fetch_conditions_cached(latitude, longitude)
+    except (NoCandidatesFoundError, RateLimitedError, UpstreamServiceError) as exc:
+        if _is_muscat_demo_request(latitude, longitude, intent, resolved_shot_type):
+            logger.warning(
+                "recommendation_demo_fallback lat=%.3f lng=%.3f reason=%s",
+                latitude,
+                longitude,
+                type(exc).__name__,
+            )
+            return _build_demo_recommendation(latitude, longitude, intent, resolved_shot_type, now)
+        raise
+
     window_light_pairs = _upcoming_light_windows(latitude, longitude, now)
 
     if not window_light_pairs:

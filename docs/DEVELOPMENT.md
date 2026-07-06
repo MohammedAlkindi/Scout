@@ -81,7 +81,7 @@ Rules:
 Python unit tests:
 
 ```bash
-pytest tests/test_scorer.py tests/test_golden_hour.py -q
+pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
 ```
 
 Browser regression tests:
@@ -96,7 +96,7 @@ Full local verification:
 npm run typecheck
 npm run build
 npm run test:e2e
-pytest tests/test_scorer.py tests/test_golden_hour.py -q
+pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
 ```
 
 ## Playwright
@@ -107,7 +107,9 @@ reuses an existing server if one is already running.
 The current E2E coverage checks:
 
 - repeated New Scout clicks do not create duplicate untouched sessions
-- manual location and intent submission renders map-first recommendations
+- manual location and activity submission renders map-first recommendations
+- result cards expose trust badges and report export controls
+- failed live scouting shows recovery actions and can open the bundled demo
 
 ## Useful Manual QA
 
@@ -118,6 +120,8 @@ Before sharing a build publicly, check:
 - manual coordinate path
 - recommendation result cards
 - map overview and embedded maps
+- trust badges and report export buttons
+- live-search failure recovery panel
 - mobile sidebar behavior
 - settings panel
 - conditions and preferences sections
@@ -141,4 +145,3 @@ Avoid committing:
 - `node_modules/`
 - `playwright-report/`
 - `test-results/`
-

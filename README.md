@@ -19,8 +19,11 @@ Live demo: [https://scoutphotography.vercel.app](https://scoutphotography.vercel
 - Scores each place/time window with deterministic service-layer logic.
 - Shows a map-first result view with ranked pins, cards, directions, and media previews.
 - Explains each recommendation with score breakdowns, confidence, reason tags, and caveats.
+- Labels each card with trust badges for live, estimated, and fallback signals.
+- Copies or downloads a shareable Markdown scout report for each recommended place.
 - Persists local sessions and preferences in the browser.
 - Prevents duplicate untouched sessions when users repeatedly start a new scout.
+- Includes a guaranteed Muscat demo flow for public walkthroughs when live providers are slow.
 - Exposes the same core capabilities as MCP tools for agent workflows.
 
 ## Architecture
@@ -82,6 +85,17 @@ Both `server/api.py` and `server/mcp_server.py` call
 When a real place image is unavailable, the frontend renders a restrained
 generated scouting preview so the layout remains useful without pretending to
 have photographic evidence.
+
+## Demo Readiness
+
+The live site includes a bundled `Try Muscat sunset scout` session. It is meant
+to be the reliable public walkthrough path: if live map/weather providers are
+slow during a Muscat-area coastal sunset request, Scout returns a `demo_mode`
+recommendation using static Muscat places plus freshly calculated light
+windows.
+
+For normal user searches, provider failures are not hidden. The API returns
+structured recovery metadata and the frontend shows retry plus demo actions.
 
 ## Documentation
 
@@ -189,13 +203,15 @@ Do not commit `.env` files or credentials.
 npm run typecheck
 npm run build
 npm run test:e2e
-pytest tests/test_scorer.py tests/test_golden_hour.py -q
+pytest tests/test_scorer.py tests/test_golden_hour.py tests/test_locations.py tests/test_demo_fallback.py -q
 ```
 
 The Python tests focus on the deterministic core: golden-hour calculations and
-condition scoring. TypeScript runs in strict mode and the project does not use
-`any` types. Playwright covers the main UI flow and a regression for repeated
-New Scout clicks creating duplicate empty sessions.
+condition scoring, Overpass query shaping, and the bundled demo fallback.
+TypeScript runs in strict mode and the project does not use `any` types.
+Playwright covers the main UI flow, recovery UX, trust badges, export controls,
+and a regression for repeated New Scout clicks creating duplicate empty
+sessions.
 
 GitHub Actions runs the full verification set on pushes to `main` and pull
 requests.
@@ -209,7 +225,7 @@ TypeScript-first.
 
 Remaining maturity steps:
 
-- Add structured observability for upstream API latency and failures.
+- Add durable observability for upstream API latency and failures.
 - Add optional provider abstraction for richer place imagery.
 - Add accessibility audits and visual regression screenshots to CI.
 - Add account-backed saved scouts if the product moves beyond local sessions.

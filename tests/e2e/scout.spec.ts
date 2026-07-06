@@ -110,5 +110,65 @@ test("sets a manual location and renders map-first recommendations", async ({ pa
   await expect(page.getByRole("link", { name: "Azaiba Beach Park, rank 1" })).toBeVisible();
   await expect(page.locator("#recommendation-1").getByRole("heading", { name: "Azaiba Beach Park" })).toBeVisible();
   await expect(page.locator("#recommendation-1").getByText("Golden-hour timing")).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByText("Live weather")).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByText("Image fallback")).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByRole("button", { name: "Copy report" })).toBeVisible();
   await expect(page.locator("#recommendation-1").getByText("What to verify")).toBeVisible();
+});
+
+test("shows recovery actions when live scout fails", async ({ page }) => {
+  await page.route("**/api/recommendation", async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Location search is temporarily unavailable. Try a more specific activity or smaller search radius.",
+        code: "upstream_unavailable",
+        retryable: true,
+        recovery_hint: "Retry once, or use the bundled Muscat demo scout for a guaranteed product walkthrough.",
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByPlaceholder("37.7749").fill("23.5791");
+  await page.getByPlaceholder("-122.4194").fill("58.4026");
+  await page.getByRole("button", { name: "Use coordinates" }).click();
+
+  await page.getByPlaceholder("Search activities").fill("portrait");
+  await page.locator(".composer").getByRole("button", { name: /Quiet portrait/ }).click();
+  await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Scout could not complete the live search." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry live scout" })).toBeVisible();
+  await page.getByRole("button", { name: "Open Muscat demo" }).click();
+
+  await expect(page.getByRole("heading", { name: "Recommended scouting route" })).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByRole("heading", { name: "Azaiba Beach Park" })).toBeVisible();
+  await expect(page.locator(".source-notice").getByText("Demo fallback", { exact: true })).toBeVisible();
+});
+
+test("keeps the main scouting flow usable on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/recommendation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(recommendationFixture),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByPlaceholder("37.7749").fill("23.5791");
+  await page.getByPlaceholder("-122.4194").fill("58.4026");
+  await page.getByRole("button", { name: "Use coordinates" }).click();
+
+  await page.getByPlaceholder("Search activities").fill("portrait");
+  await page.locator(".composer").getByRole("button", { name: /Quiet portrait/ }).click();
+  await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Recommended scouting route" })).toBeVisible();
+  await expect(page.locator("#recommendation-1").getByRole("button", { name: "Copy report" })).toBeVisible();
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(hasHorizontalOverflow).toBe(false);
 });
