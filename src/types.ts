@@ -81,6 +81,7 @@ export interface ApiErrorResponse {
 export interface Coordinates {
   latitude: number;
   longitude: number;
+  label?: string;
 }
 
 export interface SessionLocation {

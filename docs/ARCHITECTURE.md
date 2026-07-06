@@ -98,7 +98,9 @@ links hydrate into local sessions without a database.
 : Preferences panel behavior and theme handling.
 
 `src/views/*`
-: UI rendering for the location, intent, and results screens.
+: UI rendering for the location, intent, and results screens. The location
+view includes curated city, country, and place anchors so users can scout a
+destination without expanding provider searches over huge radii.
 
 `src/types.ts`
 : Shared TypeScript types mirroring backend response contracts.
@@ -111,19 +113,21 @@ links hydrate into local sessions without a database.
 
 ## Request Flow
 
-1. The browser sends a location, intent, radius, and optional shot type to
+1. The user chooses an origin from browser location, exact coordinates, or a
+   curated destination anchor.
+2. The browser sends a location, intent, radius, and optional shot type to
    `POST /api/recommendation`.
-2. FastAPI validates the request and applies client-IP rate limiting.
-3. Orchestration fetches candidate places from Overpass using an intent-derived
+3. FastAPI validates the request and applies client-IP rate limiting.
+4. Orchestration fetches candidate places from Overpass using an intent-derived
    tag query.
-4. Orchestration fetches current and hourly weather from Open-Meteo.
-5. Solar windows are computed locally using deterministic math.
-6. Each candidate is scored against each upcoming light window.
-7. The best window per candidate is ranked.
-8. The response includes score breakdowns, confidence, reason tags, caveats,
+5. Orchestration fetches current and hourly weather from Open-Meteo.
+6. Solar windows are computed locally using deterministic math.
+7. Each candidate is scored against each upcoming light window.
+8. The best window per candidate is ranked.
+9. The response includes score breakdowns, confidence, reason tags, caveats,
    map coordinates, and image metadata when available.
-9. The frontend renders a map-first overview and recommendation cards.
-10. Users can copy a read-only share link for the result; opening that URL
+10. The frontend renders a map-first overview and recommendation cards.
+11. Users can copy a read-only share link for the result; opening that URL
     creates a local shared session and removes the share payload from the
     address bar to avoid duplicate imports on reload.
 

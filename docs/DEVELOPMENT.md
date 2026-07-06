@@ -108,6 +108,7 @@ The current E2E coverage checks:
 
 - repeated New Scout clicks do not create duplicate untouched sessions
 - sidebar search filters saved sessions and shows an empty state
+- city, country, and place destination anchors can start a scout
 - manual location and activity submission renders map-first recommendations
 - result pages expose a read-only share link and imported share links hydrate
   into local sessions

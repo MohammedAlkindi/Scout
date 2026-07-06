@@ -14,6 +14,8 @@ Live demo: [https://scoutphotography.vercel.app](https://scoutphotography.vercel
 ## What Scout Does
 
 - Finds nearby candidate locations from OpenStreetMap/Overpass.
+- Starts scouts from current location, exact coordinates, or curated city,
+  country, and place anchors.
 - Calculates sunrise, sunset, golden hour, blue hour, solar noon, and azimuth.
 - Pulls current and hourly weather from Open-Meteo.
 - Scores each place/time window with deterministic service-layer logic.

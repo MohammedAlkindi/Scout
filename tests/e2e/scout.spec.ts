@@ -92,6 +92,45 @@ test("does not create duplicate untouched sessions from repeated New Scout click
   await expect(page.getByText("Location pending / No activity yet")).toBeVisible();
 });
 
+test("selects destination anchors for city, country, and place scouting", async ({ page }) => {
+  await page.route("**/api/recommendation", async (route) => {
+    const requestBody = route.request().postDataJSON() as {
+      latitude?: unknown;
+      longitude?: unknown;
+      radius_miles?: unknown;
+    };
+    expect(requestBody.latitude).toBeCloseTo(25.2048, 4);
+    expect(requestBody.longitude).toBeCloseTo(55.2708, 4);
+    expect(requestBody.radius_miles).toBe(15);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(recommendationFixture),
+    });
+  });
+
+  await page.goto("/");
+  const destinationSearch = page.getByPlaceholder("Search cities, countries, places");
+
+  await destinationSearch.fill("Japan");
+  await expect(page.getByRole("button", { name: "Scout Japan" })).toBeVisible();
+
+  await destinationSearch.fill("Yosemite");
+  await expect(page.getByRole("button", { name: "Scout Yosemite Valley" })).toBeVisible();
+
+  await destinationSearch.fill("Dubai");
+  await page.getByRole("button", { name: "Dubai, United Arab Emirates" }).click();
+  await expect(page.getByText("Dubai, United Arab Emirates / 25.2048, 55.2708")).toBeVisible();
+  await page.getByRole("button", { name: "Scout Dubai" }).click();
+
+  await expect(page.locator("#active-session-title")).toHaveText("Dubai, United Arab Emirates");
+  await page.getByPlaceholder("Search activities").fill("portrait");
+  await page.locator(".composer").getByRole("button", { name: /Quiet portrait/ }).click();
+  await page.locator(".composer").getByRole("button", { name: "Scout", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Recommended scouting route" })).toBeVisible();
+});
+
 test("sets a manual location and renders map-first recommendations", async ({ page }) => {
   await page.route("**/api/recommendation", async (route) => {
     expect(route.request().method()).toBe("POST");
@@ -132,7 +171,7 @@ test("sets a manual location and renders map-first recommendations", async ({ pa
   const shareHref = await shareLink.getAttribute("href");
   expect(shareHref).toContain("?share=");
 
-  await page.goto(shareHref ?? "/");
+  await page.goto(shareHref ?? "/", { waitUntil: "domcontentloaded" });
   await expect(page).not.toHaveURL(/share=/);
   await expect(page.locator("#active-session-title")).toHaveText("Shared: romantic coastal portraits");
   await expect(page.locator("#recommendation-1").getByRole("heading", { name: "Azaiba Beach Park" })).toBeVisible();

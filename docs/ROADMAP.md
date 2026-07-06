@@ -27,7 +27,7 @@ trust, polish, and repeatability.
 - Account-backed saved scouts.
 - Team/shared scout boards.
 - User feedback loop for recommendation quality.
-- More activity modes beyond photography and hiking.
+- More activity and destination presets beyond the initial curated anchors.
 - Optional paid provider integrations for maps, places, imagery, or traffic.
 
 ## Product Principles

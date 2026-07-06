@@ -207,7 +207,7 @@ function renderActiveSession(elements, state, renderApp) {
                 const nextLocation = {
                     lat: location.latitude,
                     lng: location.longitude,
-                    label: `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`,
+                    label: location.label ?? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`,
                 };
                 updateSession(state, { ...session, location: nextLocation, name: defaultSessionName(nextLocation, session.intent) });
                 renderApp();
